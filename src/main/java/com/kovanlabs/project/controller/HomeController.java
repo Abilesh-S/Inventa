@@ -9,7 +9,7 @@ import java.util.logging.Logger;
 public class HomeController {
     Logger LOG = Logger.getLogger(HomeController.class.getName());
     @GetMapping("/")
-    public String homePage(){
+    public String homePage() {
         LOG.info("Runned Successfully");
         return "home";
     }
