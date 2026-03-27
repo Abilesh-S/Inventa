@@ -87,6 +87,18 @@
       <version>1.5.32</version>
       <scope>compile</scope>
     </dependency>
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <version>1.18.36</version> <!-- Check for latest version -->
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <version>1.18.32</version> <!-- Use latest version -->
+      <scope>provided</scope>
+    </dependency>
   </dependencies>
   <build>
     <finalName>Inventa</finalName>

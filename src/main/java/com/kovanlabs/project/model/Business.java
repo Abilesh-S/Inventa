@@ -1,8 +1,13 @@
 package com.kovanlabs.project.model;
 import jakarta.persistence.*;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
 @Entity
+@Data
+@NoArgsConstructor
 @Table(name = "business")
 public class Business {
 
@@ -23,8 +28,6 @@ public class Business {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
-    public Business() {}
-
     public Business(String name, String ownerName, String phone, String email) {
         this.name = name;
         this.ownerName = ownerName;
@@ -33,39 +36,4 @@ public class Business {
         this.createdAt = LocalDateTime.now();
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public String getName() {
-        return name;
-    }
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getOwnerName() {
-        return ownerName;
-    }
-    public void setOwnerName(String ownerName) {
-        this.ownerName = ownerName;
-    }
-
-    public String getPhone() {
-        return phone;
-    }
-    public void setPhone(String phone) {
-        this.phone = phone;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
 }

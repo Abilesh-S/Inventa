@@ -1,8 +1,12 @@
 package com.kovanlabs.project.model;
 
 import jakarta.persistence.*;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Entity
+@Data
+@NoArgsConstructor
 @Table(name = "role")
 public class Role {
 
@@ -13,8 +17,6 @@ public class Role {
     @Column(nullable = false, unique = true)
     private String name;
 
-    public Role() {}
-
     public Role(String name) {
         this.name = name;
     }
@@ -23,10 +25,5 @@ public class Role {
         return id;
     }
 
-    public String getName() {
-        return name;
-    }
-    public void setName(String name) {
-        this.name = name;
-    }
+
 }
