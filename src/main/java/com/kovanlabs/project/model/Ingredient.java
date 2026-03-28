@@ -4,7 +4,9 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.util.Date;
+import java.util.List;
 
 @Entity
 @Table(name = "ingredient" )
@@ -14,17 +16,27 @@ public class Ingredient {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long id;
+
     @ManyToOne
     @JoinColumn(name = "tenant_id" , referencedColumnName = "id")
     private Business business;
+
     private String name ;
     private int units;
     private boolean isActive;
-    @Temporal(TemporalType.DATE)
-    private Date created_date;
+    private LocalDate created_date;
 
-    public Ingredient(long id, Business business, String productName, int quantity, boolean isActive, Date created_date) {
-        this.id = id;
+    @OneToMany(mappedBy = "ingredient")
+    private List<WarehouseInventory> warehouseInventories;
+
+    @OneToMany(mappedBy = "ingredient")
+    private List<BranchInventory> branchInventories;
+
+    @OneToMany(mappedBy = "ingredient")
+    private List<StockTransferList> stockTransferLists;
+
+
+    public Ingredient(Business business, String productName, int quantity, boolean isActive, LocalDate created_date) {
         this.business = business;
         this.name = productName;
         this.units = quantity;

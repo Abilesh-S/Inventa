@@ -4,6 +4,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "business")
@@ -15,7 +16,7 @@ public class Business {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(name = "shop_name" , nullable = false)
     private String name;
 
     @Column(name = "owner_name", nullable = false)
@@ -27,6 +28,16 @@ public class Business {
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+
+    @OneToMany(mappedBy = "business")
+    private List<Branch> branch;
+
+    @OneToMany(mappedBy = "business")
+    private List<Ingredient> ingredient;
+
+    @OneToMany(mappedBy = "business")
+    private List<Order> orders;
+
 
     public Business(String name, String ownerName, String phone, String email) {
         this.name = name;

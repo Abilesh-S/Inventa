@@ -1,15 +1,24 @@
 package com.kovanlabs.project.model;
 
 import jakarta.persistence.*;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "branch")
+@NoArgsConstructor
+@Data
 public class Branch {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne
+    @JoinColumn(name = "business_id", nullable = false)
+    private Business business;
 
     @Column(nullable = false)
     private String name;
@@ -21,13 +30,13 @@ public class Branch {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
-    @ManyToOne
-    @JoinColumn(name = "business_id", nullable = false)
-    private Business business;
+    @OneToMany(mappedBy = "branch")
+    private List<StockTransferList> stockTransferList;
 
-    public Branch() {
+    @OneToMany(mappedBy = "branch")
+    private List<Order> orders;
 
-    }
+
 
     public Branch(String name, String location, String phone, Business business) {
         this.name = name;
@@ -37,40 +46,4 @@ public class Branch {
         this.createdAt = LocalDateTime.now();
     }
 
-
-    public Long getId() {
-        return id;
-    }
-
-    public String getName() {
-        return name;
-    }
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getLocation() {
-        return location;
-    }
-    public void setLocation(String location) {
-        this.location = location;
-    }
-
-    public String getPhone() {
-        return phone;
-    }
-    public void setPhone(String phone) {
-        this.phone = phone;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public Business getBusiness() {
-        return business;
-    }
-    public void setBusiness(Business business) {
-        this.business = business;
-    }
 }

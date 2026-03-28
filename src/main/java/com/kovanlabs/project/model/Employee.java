@@ -1,10 +1,16 @@
 package com.kovanlabs.project.model;
 
 import jakarta.persistence.*;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "employees")
+@NoArgsConstructor
+@Data
 public class Employee {
 
     @Id
@@ -31,13 +37,12 @@ public class Employee {
     @JoinColumn(name = "branch_id")
     private Branch branch;
 
-
     @ManyToOne
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
 
-
-    public Employee() {}
+    @OneToMany(mappedBy = "employee")
+    private List<Order> order;
 
     public Employee(String username, String password, Business business, Role role) {
         this.username = username;
@@ -48,25 +53,4 @@ public class Employee {
         this.isActive = true;
     }
 
-    public Long getId() { return id; }
-
-    public String getUsername() { return username; }
-    public void setUsername(String username) { this.username = username; }
-
-    public String getPassword() { return password; }
-    public void setPassword(String password) { this.password = password; }
-
-    public boolean isActive() { return isActive; }
-    public void setActive(boolean active) { isActive = active; }
-
-    public LocalDateTime getCreatedAt() { return createdAt; }
-
-    public Business getBusiness() { return business; }
-    public void setBusiness(Business business) { this.business = business; }
-
-    public Branch getBranch() { return branch; }
-    public void setBranch(Branch branch) { this.branch = branch; }
-
-    public Role getRole() { return role; }
-    public void setRole(Role role) { this.role = role; }
 }
