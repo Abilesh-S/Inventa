@@ -16,7 +16,7 @@ import java.time.LocalDate;
 public class StockTransferList {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private int id;
+    private long id;
 
     @ManyToOne
     @JoinColumn(name = "warehouse_id" , referencedColumnName = "id")

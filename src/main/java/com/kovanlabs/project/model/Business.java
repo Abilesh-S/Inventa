@@ -1,5 +1,6 @@
 package com.kovanlabs.project.model;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -9,12 +10,13 @@ import java.util.List;
 @Entity
 @Table(name = "business")
 @NoArgsConstructor
+@AllArgsConstructor
 @Data
 public class Business {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private long id;
 
     @Column(name = "shop_name" , nullable = false)
     private String name;
@@ -37,14 +39,5 @@ public class Business {
 
     @OneToMany(mappedBy = "business")
     private List<Order> orders;
-
-
-    public Business(String name, String ownerName, String phone, String email) {
-        this.name = name;
-        this.ownerName = ownerName;
-        this.phone = phone;
-        this.email = email;
-        this.createdAt = LocalDateTime.now();
-    }
 
 }

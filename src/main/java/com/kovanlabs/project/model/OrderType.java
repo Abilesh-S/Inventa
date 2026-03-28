@@ -1,5 +1,5 @@
 package com.kovanlabs.project.model;
 
-public enum Order_Type{
+public enum OrderType {
     POS , KIOSK , ONLINE
 }

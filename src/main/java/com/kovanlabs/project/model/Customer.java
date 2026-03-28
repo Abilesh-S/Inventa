@@ -15,7 +15,7 @@ import java.util.List;
 public class Customer {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private int id;
+    private long id;
 
     @Column(name = "customer_name" , nullable = false)
     private String name;
@@ -28,4 +28,7 @@ public class Customer {
     @OneToMany(mappedBy = "customer")
     private List<Order> order;
 
+    @OneToOne
+    @JoinColumn(name = "login_id" ,referencedColumnName = "id")
+    private LoginCredentials loginId;
 }

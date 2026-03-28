@@ -18,7 +18,7 @@ import java.util.List;
 public class Order {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private int id;
+    private long id;
 
     @ManyToOne
     @JoinColumn(name = "tenant_id" , referencedColumnName = "id")
@@ -39,13 +39,13 @@ public class Order {
     private int total_amount ;
 
     @Enumerated(EnumType.STRING)
-    private Order_Type orderType;
+    private OrderType orderType;
 
     @Enumerated(EnumType.STRING)
     private Status status;
 
     @Enumerated(EnumType.STRING)
-    private Payment_Status paymentStatus;
+    private PaymentStatus paymentStatus;
 
     private LocalDate created_at ;
 

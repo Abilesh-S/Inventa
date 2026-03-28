@@ -1,6 +1,7 @@
 package com.kovanlabs.project.model;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
@@ -9,12 +10,13 @@ import java.util.List;
 @Entity
 @Table(name = "branch")
 @NoArgsConstructor
+@AllArgsConstructor
 @Data
 public class Branch {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private long id;
 
     @ManyToOne
     @JoinColumn(name = "business_id", nullable = false)
@@ -35,15 +37,5 @@ public class Branch {
 
     @OneToMany(mappedBy = "branch")
     private List<Order> orders;
-
-
-
-    public Branch(String name, String location, String phone, Business business) {
-        this.name = name;
-        this.location = location;
-        this.phone = phone;
-        this.business = business;
-        this.createdAt = LocalDateTime.now();
-    }
 
 }

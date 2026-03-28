@@ -1,5 +1,5 @@
 package com.kovanlabs.project.model;
 
-public enum Payment_Status {
+public enum PaymentStatus {
     PAID , UNPAID ;
 }

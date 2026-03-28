@@ -16,7 +16,7 @@ import java.util.List;
 public class Product {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private int id;
+    private long id;
 
     @ManyToOne
     @JoinColumn(name = "tenant_id" ,referencedColumnName = "id")
@@ -33,6 +33,15 @@ public class Product {
     private boolean is_active;
 
     private LocalDate created_date;
+
+    @Column(name = "product_quantity")
+    private int quantity;
+
+    @Column(name = "product_price")
+    private int price;
+
+    @OneToMany(mappedBy = "product")
+    private List<Recipe> recipes;
 
     @OneToMany(mappedBy = "product")
     private List<OrderItem> orderItem;

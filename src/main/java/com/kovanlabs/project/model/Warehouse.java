@@ -30,7 +30,7 @@ public class Warehouse {
     private List<WarehouseInventory> warehouseInventory;
 
     @OneToMany(mappedBy = "warehouse")
-    private List<StockTransferList> stockTransferLists;
+    private List<StockTransferList>  stockTransferLists;
 
 
     public Warehouse(Business business, String name, String location, LocalDate createdDate) {

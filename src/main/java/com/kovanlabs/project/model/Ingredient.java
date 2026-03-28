@@ -1,6 +1,7 @@
 package com.kovanlabs.project.model;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -11,6 +12,7 @@ import java.util.List;
 @Entity
 @Table(name = "ingredient" )
 @NoArgsConstructor
+@AllArgsConstructor
 @Data
 public class Ingredient {
     @Id
@@ -35,12 +37,4 @@ public class Ingredient {
     @OneToMany(mappedBy = "ingredient")
     private List<StockTransferList> stockTransferLists;
 
-
-    public Ingredient(Business business, String productName, int quantity, boolean isActive, LocalDate created_date) {
-        this.business = business;
-        this.name = productName;
-        this.units = quantity;
-        this.isActive = isActive;
-        this.created_date = created_date;
-    }
 }

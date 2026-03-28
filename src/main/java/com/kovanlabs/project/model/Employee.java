@@ -1,6 +1,7 @@
 package com.kovanlabs.project.model;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -10,18 +11,20 @@ import java.util.List;
 @Entity
 @Table(name = "employees")
 @NoArgsConstructor
+@AllArgsConstructor
 @Data
 public class Employee {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private long id;
+
+    @OneToOne
+    @JoinColumn(name = "login_id" ,referencedColumnName = "id")
+    private LoginCredentials loginId;
 
     @Column(nullable = false, unique = true)
-    private String username;
-
-    @Column(nullable = false)
-    private String password;
+    private String name;
 
     @Column(name = "is_active")
     private boolean isActive = true;
@@ -44,13 +47,7 @@ public class Employee {
     @OneToMany(mappedBy = "employee")
     private List<Order> order;
 
-    public Employee(String username, String password, Business business, Role role) {
-        this.username = username;
-        this.password = password;
-        this.business = business;
-        this.role = role;
-        this.createdAt = LocalDateTime.now();
-        this.isActive = true;
-    }
+    @OneToMany(mappedBy = "modifiedBy")
+    private List<Audits> audits;
 
 }
