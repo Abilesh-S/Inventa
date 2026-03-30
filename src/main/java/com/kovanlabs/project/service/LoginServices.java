@@ -4,6 +4,7 @@ package com.kovanlabs.project.service;
 import com.kovanlabs.project.model.LoginCredentials;
 import com.kovanlabs.project.repository.LoginCredentialRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import java.util.Optional;
 
@@ -12,6 +13,8 @@ public class LoginServices {
 
     @Autowired
     LoginCredentialRepository loginRepository;
+    @Autowired
+    BCryptPasswordEncoder passwordEncoder;
 
     public String loginValidation(LoginCredentials loginDetails){
 
@@ -21,10 +24,10 @@ public class LoginServices {
             return "User not found";
         }
 
-        LoginCredentials dbUser = loginCredentials.orElse(null);
+        LoginCredentials dbUser = loginCredentials.get();
 
         if (dbUser != null)  {
-            if (loginDetails.getPassword().equals(dbUser.getPassword())) {
+            if (passwordEncoder.matches(loginDetails.getPassword(),dbUser.getPassword())) {
                 return "Valid User";
             } else {
                 return "Invalid Password";
