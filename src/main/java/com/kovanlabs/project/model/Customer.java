@@ -1,34 +1,34 @@
 package com.kovanlabs.project.model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
 @Entity
-@Table(name = "online_customer")
+@Table(name = "customer")
 @NoArgsConstructor
-@AllArgsConstructor
 @Data
 public class Customer {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private long id;
 
-    @Column(name = "customer_name" , nullable = false)
-    private String name;
+    @Column(name = "email" , unique = true , nullable = false)
+    private String emailId ;
 
-    private String address;
+    @Column(name = "address" )
+    private String address ;
 
-    @Column(name = "phone_no" , nullable = false)
-    private String phoneno;
-
-    @OneToMany(mappedBy = "customer")
-    private List<Order> order;
+    @Column(name = "phoneNumber")
+    private String phoneNumber;
 
     @OneToOne
-    @JoinColumn(name = "login_id" ,referencedColumnName = "id")
-    private LoginCredentials loginId;
+    @JoinColumn(name = "loginId" )
+    private LoginCredentials loginCredentials;
+
+    public Customer(String emailId, String address, String phoneNumber) {
+        this.emailId = emailId;
+        this.address = address;
+        this.phoneNumber = phoneNumber;
+    }
 }

@@ -17,7 +17,7 @@ import java.util.Properties;
 @Configuration
 @EnableTransactionManagement
 @ComponentScan(basePackages = "com.kovanlabs.project")
-@EnableJpaRepositories(basePackages = "com.kovanlabs.project.model")
+@EnableJpaRepositories(basePackages = "com.kovanlabs.project")
 @PropertySource("classpath:db.properties")
 public class JpaConfig {
     private final Environment env;

@@ -1,4 +1,4 @@
-package com.kovanlabs.project.model;
+package com.kovanlabs.project.enums;
 
 public enum OrderType {
     POS , KIOSK , ONLINE
