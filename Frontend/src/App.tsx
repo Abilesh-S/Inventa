@@ -1,0 +1,49 @@
+import { Route, Routes } from "react-router-dom";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Dashboard from "./pages/Dashboard";
+
+function OwnerLayout() {
+  return (
+    <div className="layout-root">
+      <aside className="layout-sidebar">
+        <div className="layout-brand">
+          <div className="auth-logo-icon small" />
+          <span className="auth-logo-text">Ventorie</span>
+        </div>
+        <nav className="layout-nav">
+          <button className="layout-nav-item active">Overview</button>
+          <button className="layout-nav-item">Warehouses</button>
+          <button className="layout-nav-item">Inventory</button>
+          <button className="layout-nav-item">Stock Requests</button>
+          <button className="layout-nav-item">Bills</button>
+          <button className="layout-nav-item">Alerts</button>
+          <button className="layout-nav-item">Settings</button>
+        </nav>
+      </aside>
+      <main className="layout-main">
+        <header className="layout-header">
+          <h1>Owner Overview</h1>
+          <p>High-level snapshot of your inventory operations.</p>
+        </header>
+        <section className="layout-content">
+          <div className="layout-placeholder-card">
+            Owner dashboard content will go here.
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/owner" element={<OwnerLayout />} />
+      <Route path="/dashboard" element={<Dashboard />} />
+    </Routes>
+  );
+}
+
