@@ -24,6 +24,7 @@ public class OrderService {
     private final CustomerRepository customerRepository;
     private final BillRepository billRepository;
     private final AuditService auditService;
+    private final SmsService smsService;
 
     public OrderService(OrderRepository orderRepository,
                         ProductRepository productRepository,
@@ -32,7 +33,8 @@ public class OrderService {
                         LowStockAlertService lowStockAlertService,
                         CustomerRepository customerRepository,
                         BillRepository billRepository,
-                        AuditService auditService
+                        AuditService auditService,
+                        SmsService smsService
     ) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
@@ -42,6 +44,7 @@ public class OrderService {
         this.customerRepository = customerRepository;
         this.billRepository = billRepository;
         this.auditService=auditService;
+        this.smsService = smsService;
     }
 
     public OrderBillResponseDTO placeOrder(OrderDTO dto) {
@@ -135,6 +138,9 @@ public class OrderService {
 
         double taxPercent = dto.getTaxPercent() == null ? 5.0 : dto.getTaxPercent();
         Bill bill = buildAndSaveBill(order, customer, product, dto.getQuantity(), taxPercent);
+
+        // SMS send should never break the billing flow.
+        smsService.sendBillSms(customer, bill);
 
         logger.info("Bill generated: billId={}, totalAmount={}", bill.getId(), bill.getTotalAmount());
         return new OrderBillResponseDTO(order, bill);
