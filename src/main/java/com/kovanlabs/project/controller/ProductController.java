@@ -18,17 +18,8 @@ public class ProductController {
     }
 
     @PostMapping
-    public Product createProduct(@RequestBody ProductDTO dto) {
+    public String createProduct(@RequestBody ProductDTO dto) {
         return service.createProduct(dto);
     }
 
-    @PostMapping("/recipe")
-    public Recipe addRecipe(@RequestBody RecipeDTO dto) {
-        return service.addRecipe(dto);
-    }
-
-    @GetMapping("/{productId}/recipes")
-    public List<Recipe> getRecipes(@PathVariable Long productId) {
-        return service.getRecipes(productId);
-    }
 }

@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -14,61 +15,40 @@ public class ProductService {
     private static final Logger logger = LoggerFactory.getLogger(ProductService.class);
     private final ProductRepository productRepository;
     private final RecipeRepository recipeRepository;
+    private final IngredientsRepository ingredientsRepository;
 
     public ProductService(ProductRepository productRepository,
-                          RecipeRepository recipeRepository) {
+                          RecipeRepository recipeRepository ,
+                          IngredientsRepository ingredientsRepository) {
         this.productRepository = productRepository;
         this.recipeRepository = recipeRepository;
+        this.ingredientsRepository = ingredientsRepository;
     }
 
 
-    public Product createProduct(ProductDTO dto) {
-        logger.info("Creating product: name={}, category={}, price={}",
-                dto.getName(), dto.getCategory(), dto.getPrice());
+    public String createProduct(ProductDTO productDTO) {
+//      Specifying Product ID to specify maping the product with recipes
+        logger.info("Creating a product with recipe ");
+        Product product = productRepository.save(productDTO.getProduct());
 
-        if (dto.getName() == null || dto.getName().trim().isEmpty()) {
-            logger.warn("Product creation failed: name is empty");
-            throw new RuntimeException("Product name is required");
+        List<Recipe> recipeList = new ArrayList<>();
+
+        for (RecipeDTO recipeDTO : productDTO.getRecipes()) {
+            Ingredients ingredients = ingredientsRepository.findByIngredientsNameIgnoreCase(recipeDTO.getIngredientName())
+                    .orElseGet(() -> {
+                        Ingredients newIngredients = new Ingredients();
+                        newIngredients.setIngredientsName(recipeDTO.getIngredientName());
+                        return ingredientsRepository.save(newIngredients);
+                    });
+
+            Recipe recipe = new Recipe();
+            recipe.setProduct(product);
+            recipe.setIngredientName(ingredients.getIngredientsName());
+            recipe.setQuantity(recipeDTO.getQuantity());
+
+            recipeList.add(recipe);
         }
-
-        Product p = new Product();
-        p.setName(dto.getName());
-        p.setPrice(dto.getPrice());
-        p.setCategory(dto.getCategory());
-        p = productRepository.save(p);
-        logger.info("Product created successfully: productId={}", p.getId());
-        return p;
-    }
-
-    public Recipe addRecipe(RecipeDTO dto) {
-        logger.info("Adding recipe: productId={}, ingredient={}, quantity={}, unit={}",
-                dto.getProductId(), dto.getIngredientName(), dto.getQuantity(), dto.getUnit());
-        Product product = productRepository.findById(dto.getProductId())
-                .orElseThrow(() -> {
-                    logger.error("Product not found for recipe: productId={}", dto.getProductId());
-                    return new RuntimeException("Product not found");
-                });
-        if (dto.getIngredientName() == null || dto.getIngredientName().trim().isEmpty()) {
-            logger.warn("Invalid ingredient name for productId={}", dto.getProductId());
-            throw new RuntimeException("Ingredient name is required");
-        }
-
-        Recipe recipe = new Recipe();
-        recipe.setProduct(product);
-        recipe.setIngredientName(dto.getIngredientName().trim().toLowerCase());
-        recipe.setQuantity(dto.getQuantity());
-        recipe.setUnit(dto.getUnit());
-
-        recipe= recipeRepository.save(recipe);
-        logger.info("Recipe added successfully: recipeId={}, productId={}",
-                recipe.getId(), product.getId());
-        return recipe;
-    }
-
-    public List<Recipe> getRecipes(Long productId) {
-        logger.info("Fetching recipes for productId={}", productId);
-        List<Recipe> recipes = recipeRepository.findByProductId(productId);
-        logger.debug("Recipes fetched: count={}, productId={}", recipes.size(), productId);
-        return recipes;
+        recipeRepository.saveAll(recipeList);
+        return "Product Created Successfully";
     }
 }

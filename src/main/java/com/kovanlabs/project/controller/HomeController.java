@@ -1,16 +1,35 @@
 package com.kovanlabs.project.controller;
 
-import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.GetMapping;
 
-import java.util.logging.Logger;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.core.user.OAuth2User;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
 
 @Controller
 public class HomeController {
-    Logger LOG = Logger.getLogger(HomeController.class.getName());
-    @GetMapping("/")
-    public String homePage() {
-        LOG.info("Runned Successfully");
+
+    @GetMapping("/login")
+    public String login(){
+        return "login";
+    }
+
+    @GetMapping("/home")
+    public String home(Model model, Authentication authentication) {
+
+        if (authentication != null && authentication.getPrincipal() instanceof OAuth2User) {
+
+            OAuth2User principal = (OAuth2User) authentication.getPrincipal();
+
+            String name = principal.getAttribute("login");
+            String email = principal.getAttribute("email");
+
+            model.addAttribute("userName", name);
+            model.addAttribute("userEmail", email);
+        }
+
         return "home";
     }
 }
