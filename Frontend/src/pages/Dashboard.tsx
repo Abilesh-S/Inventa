@@ -1,186 +1,244 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import Sidebar from "../components/Sidebar";
+import Header from "../components/Header";
 
-import { Link, useNavigate } from "react-router-dom";
+const API_BASE = "http://localhost:8080/Inventa/api";
+
+interface DashboardData {
+  warehouseName: string;
+  totalProducts: number;
+  warehouseStock: number;
+  inventoryCount: number;
+  outOfStockCount: number;
+  lowStockCount: number;
+  expiringCount: number;
+  totalBranches: number;
+  foodWastage: number;
+  totalProfit: number;
+  profitGrowth: number;
+  overallPercentage: number;
+  recentActivity: any[];
+  stockLevels: any[];
+  orderSummary: any[];
+  profitByCategory: any[];
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showNotifications, setShowNotifications] = useState(false);
 
-  const handleLogout = (e: React.MouseEvent) => {
-    e.preventDefault();
-    localStorage.removeItem("user");
-    navigate("/");
+  useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (!userStr) {
+      navigate("/");
+      return;
+    }
+
+    const user = JSON.parse(userStr);
+    if (!user.auth) {
+      navigate("/");
+      return;
+    }
+
+    const fetchStats = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/dashboard/stats`, {
+          headers: {
+            'Authorization': `Basic ${user.auth}`
+          }
+        });
+        if (res.ok) {
+          const stats = await res.json();
+          if (stats.error) {
+            console.error("Backend Stats Error:", stats.error, stats.type);
+          } else {
+            setData(stats);
+          }
+        } else {
+          console.error("Dashboard HTTP Error:", res.status);
+        }
+      } catch (err) {
+        console.error("Failed to fetch dashboard stats", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const fetchPendingRequests = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/stock-requests/pending`, {
+          headers: { 'Authorization': `Basic ${user.auth}` }
+        });
+        if (res.ok) setPendingRequests(await res.json());
+      } catch (err) {
+        console.error("Failed to fetch pending requests", err);
+      }
+    };
+
+    fetchStats();
+    fetchPendingRequests();
+
+    // Auto-refresh notifications every 30 seconds
+    const interval = setInterval(fetchPendingRequests, 30000);
+    return () => clearInterval(interval);
+  }, [navigate]);
+
+  const handleApproveRequest = async (id: number) => {
+    const userStr = localStorage.getItem("user");
+    if (!userStr) return;
+    const user = JSON.parse(userStr);
+
+    try {
+      const res = await fetch(`${API_BASE}/stock-requests/${id}/approve`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Basic ${user.auth}`
+        },
+        body: JSON.stringify({ remark: "Approved by Owner" })
+      });
+      if (res.ok) {
+        setPendingRequests(prev => prev.filter(r => r.id !== id));
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || "Failed to approve request. Stock might be insufficient.");
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
+  if (loading) {
+    return (
+      <div className="bg-background text-on-surface min-h-screen flex items-center justify-center">
+        <p className="text-xl font-bold animate-pulse">Synchronizing Workspace...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-background text-on-surface min-h-screen">
-      {/* NavigationDrawer */}
-      <aside className="bg-[#0c0f10] h-screen w-64 fixed left-0 top-0 flex flex-col py-8 z-50">
-        <div className="px-8 mb-10">
-          <h1 className="text-2xl font-black text-[#C6FF3D] tracking-tighter italic">Ventorie</h1>
-        </div>
-        <nav className="flex-1 space-y-1">
-          <Link
-            className="flex items-center px-8 py-3 text-[#C6FF3D] border-l-4 border-[#C6FF3D] bg-white/5 font-['Inter'] font-medium tracking-tight transition-all duration-200"
-            to="/dashboard"
-          >
-            <span className="material-symbols-outlined mr-3">dashboard</span>
-            <span>Dashboard</span>
-          </Link>
-          <a
-            className="flex items-center px-8 py-3 text-gray-500 hover:text-gray-300 hover:bg-white/5 font-['Inter'] font-medium tracking-tight transition-all duration-200"
-            href="#"
-          >
-            <span className="material-symbols-outlined mr-3">storefront</span>
-            <span>Stores</span>
-          </a>
-          <a
-            className="flex items-center px-8 py-3 text-gray-500 hover:text-gray-300 hover:bg-white/5 font-['Inter'] font-medium tracking-tight transition-all duration-200"
-            href="#"
-          >
-            <span className="material-symbols-outlined mr-3">inventory_2</span>
-            <span>Products</span>
-          </a>
-          <a
-            className="flex items-center px-8 py-3 text-gray-500 hover:text-gray-300 hover:bg-white/5 font-['Inter'] font-medium tracking-tight transition-all duration-200"
-            href="#"
-          >
-            <span className="material-symbols-outlined mr-3">category</span>
-            <span>Category</span>
-          </a>
-          <a
-            className="flex items-center px-8 py-3 text-gray-500 hover:text-gray-300 hover:bg-white/5 font-['Inter'] font-medium tracking-tight transition-all duration-200"
-            href="#"
-          >
-            <span className="material-symbols-outlined mr-3">local_shipping</span>
-            <span>Suppliers</span>
-          </a>
-          <a
-            className="flex items-center px-8 py-3 text-gray-500 hover:text-gray-300 hover:bg-white/5 font-['Inter'] font-medium tracking-tight transition-all duration-200"
-            href="#"
-          >
-            <span className="material-symbols-outlined mr-3">payments</span>
-            <span>Billing</span>
-          </a>
-          <a
-            className="flex items-center px-8 py-3 text-gray-500 hover:text-gray-300 hover:bg-white/5 font-['Inter'] font-medium tracking-tight transition-all duration-200"
-            href="#"
-          >
-            <span className="material-symbols-outlined mr-3">receipt_long</span>
-            <span>Orders</span>
-          </a>
-          <a
-            className="flex items-center px-8 py-3 text-gray-500 hover:text-gray-300 hover:bg-white/5 font-['Inter'] font-medium tracking-tight transition-all duration-200"
-            href="#"
-          >
-            <span className="material-symbols-outlined mr-3">local_post_office</span>
-            <span>Delivery</span>
-          </a>
-          <a
-            className="flex items-center px-8 py-3 text-gray-500 hover:text-gray-300 hover:bg-white/5 font-['Inter'] font-medium tracking-tight transition-all duration-200"
-            href="#"
-          >
-            <span className="material-symbols-outlined mr-3">analytics</span>
-            <span>Reports</span>
-          </a>
-          <div className="mt-8 pt-8 border-t border-white/5">
-            <a
-              className="flex items-center px-8 py-3 text-gray-500 hover:text-gray-300 hover:bg-white/5 font-['Inter'] font-medium tracking-tight transition-all duration-200"
-              href="#"
-            >
-              <span className="material-symbols-outlined mr-3">settings</span>
-              <span>Settings</span>
-            </a>
-            <a
-              className="flex items-center px-8 py-3 text-gray-500 hover:text-gray-300 hover:bg-white/5 font-['Inter'] font-medium tracking-tight transition-all duration-200"
-              href="#"
-            >
-              <span className="material-symbols-outlined mr-3">help</span>
-              <span>Help</span>
-            </a>
-            <a
-              onClick={handleLogout}
-              className="flex items-center px-8 py-3 text-gray-500 hover:text-gray-300 hover:bg-white/5 font-['Inter'] font-medium tracking-tight transition-all duration-200 cursor-pointer"
-            >
-              <span className="material-symbols-outlined mr-3">logout</span>
-              <span>Logout</span>
-            </a>
-          </div>
-        </nav>
-      </aside>
+    <div className="bg-background text-on-surface min-h-screen flex">
+      <Sidebar />
 
       {/* Main Content Area */}
-      <main className="ml-64 min-h-screen bg-background">
-        {/* TopAppBar */}
-        <header className="w-full h-16 sticky top-0 z-40 bg-[#f5f6f8] dark:bg-[#0c0f10] flex items-center justify-between px-8">
-          <div className="flex items-center bg-surface-container-low rounded-xl px-4 py-2 w-96 focus-within:ring-2 focus-within:ring-[#C6FF3D] transition-all">
-            <span className="material-symbols-outlined text-on-surface-variant mr-2">search</span>
-            <input
-              className="bg-transparent border-none focus:ring-0 text-sm w-full font-medium focus:outline-none"
-              placeholder="Search for products, orders..."
-              type="text"
-            />
-          </div>
+      <main className="ml-56 flex-1 min-h-screen bg-background">
+        <Header
+          title="Dashboard"
+          subtitle="Operational Intelligence"
+          searchPlaceholder="Search resources..."
+          icon="dashboard"
+        >
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
-              <div className="text-right">
-                <p className="text-sm font-bold tracking-tight text-on-surface">Super Admin</p>
-                <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">Enterprise Access</p>
-              </div>
-              <div className="w-10 h-10 rounded-xl overflow-hidden bg-primary-container flex items-center justify-center">
-                <img
-                  alt="Admin Profile"
-                  className="w-full h-full object-cover"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuD2J-jM2Odjyq4U3N_4fQY5p3Io_eECDpOwin5H1hkPkbVZWnaPs--PoV52QG4lY83vTBTeSGALG2MN3Or-pwqGGHe59zGvfvYlNpiPvlNOrxJiNUJfkT_vPhbQmfamYGHgEP4MccVV1IpkDV3WgvRSrRUkZ-C_D5VL0laLp_H82GVNHkrAdJoM22BUcXE4s6gINHw71OBH2VdJhKiODYv8iOhLsIba6tUt1J3bA67FoGtGEH4O9OL20ylEi-pp3nGGeqEVz7nUJ7w"
-                />
-              </div>
+            {/* Notification Hub */}
+            <div className="relative">
+              <button
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="relative p-2.5 bg-white border border-[#abadaf]/10 rounded-xl hover:bg-[#eff1f3] transition-colors"
+              >
+                <span className="material-symbols-outlined text-[#0c0f10] text-[22px]">notifications</span>
+                {pendingRequests.length > 0 && (
+                  <span className="absolute -top-1 -right-1 h-5 w-5 bg-error text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white animate-pulse">
+                    {pendingRequests.length}
+                  </span>
+                )}
+              </button>
+
+              {/* Notification Popover */}
+              {showNotifications && (
+                <div className="absolute right-0 mt-4 w-[320px] bg-white rounded-2xl shadow-2xl border border-black/5 z-[50] overflow-hidden">
+                  <div className="p-4 bg-[#f5f6f8] border-b border-black/5 flex justify-between items-center">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#0c0f10]">Pending Actions</p>
+                    <span className="text-[10px] font-bold text-error">{pendingRequests.length} Requests</span>
+                  </div>
+                  <div className="max-h-[350px] overflow-y-auto no-scrollbar">
+                    {pendingRequests.length === 0 ? (
+                      <div className="p-10 text-center">
+                        <span className="material-symbols-outlined text-[40px] text-[#abadaf] opacity-20 block mb-2">check_circle</span>
+                        <p className="text-xs font-bold text-[#abadaf]">Logistics clear</p>
+                      </div>
+                    ) : (
+                      pendingRequests.map((req) => (
+                        <div key={req.id} className="p-4 border-b border-black/5 hover:bg-[#eff1f3]/50 transition-colors">
+                          <div className="flex justify-between items-start mb-1">
+                            <p className="text-sm font-black text-[#0c0f10] uppercase tracking-tighter">{req.ingredientName}</p>
+                            <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">New</span>
+                          </div>
+                          <p className="text-[10px] font-bold text-[#595c5e]">
+                            Branch: <span className="text-[#0c0f10]">#{req.branchId}</span> •
+                            Qty: <span className="text-[#0c0f10]">{req.requiredQuantity} {req.unit}</span>
+                          </p>
+                          <div className="mt-3">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleApproveRequest(req.id);
+                              }}
+                              className="w-full py-1.5 bg-black text-[#c5fe3c] text-[9px] font-black uppercase tracking-widest rounded-lg hover:scale-105 transition-all shadow-md flex items-center justify-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-xs">local_shipping</span>
+                              Dispatch now
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
+
+            <div className="h-10 w-px bg-black/5 hidden md:block"></div>
           </div>
-        </header>
+        </Header>
 
         {/* Dashboard Content */}
-        <div className="p-8 max-w-[1600px] mx-auto space-y-8">
-          {/* Stats Bento Grid */}
+        <div className="p-8 space-y-8">
+          {/* Stats Bento Grid - 4x2 Symmetric Layout */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Card 1 */}
+            {/* Card 1 - Branches */}
             <div className="bg-surface-container-lowest p-6 rounded-xl hover:-translate-y-1 hover:shadow-[0px_24px_48px_rgba(44,47,49,0.06)] transition-all duration-300">
               <div className="flex justify-between items-start mb-4">
                 <div className="p-2 bg-surface-container-low rounded-lg">
-                  <span className="material-symbols-outlined text-primary">inventory_2</span>
-                </div>
-                <div className="flex items-center gap-1 bg-primary-container/20 px-2 py-1 rounded-full">
-                  <span
-                    className="material-symbols-outlined text-[12px] text-primary"
-                    style={{ fontVariationSettings: "'FILL' 1" }}
-                  >
-                    trending_up
-                  </span>
-                  <span className="text-[10px] font-bold text-on-primary-container">+12%</span>
+                  <span className="material-symbols-outlined text-primary">storefront</span>
                 </div>
               </div>
-              <p className="text-on-surface-variant text-sm font-medium">Total Products</p>
-              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">24,512</h2>
+              <p className="text-on-surface-variant text-sm font-medium">Active Branches</p>
+              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">{data?.totalBranches || "0"}</h2>
             </div>
-            
-            {/* Card 2 */}
+
+            {/* Card 2 - Warehouse */}
             <div className="bg-surface-container-lowest p-6 rounded-xl hover:-translate-y-1 hover:shadow-[0px_24px_48px_rgba(44,47,49,0.06)] transition-all duration-300">
-              <div className="flex justify-between items-start mb-4">
+              <div className="flex justify-between items-center mb-4">
                 <div className="p-2 bg-surface-container-low rounded-lg">
-                  <span className="material-symbols-outlined text-primary">check_circle</span>
+                  <span className="material-symbols-outlined text-primary">warehouse</span>
                 </div>
                 <div className="flex items-center gap-1 bg-primary-container/20 px-2 py-1 rounded-full">
-                  <span
-                    className="material-symbols-outlined text-[12px] text-primary"
-                    style={{ fontVariationSettings: "'FILL' 1" }}
-                  >
-                    trending_up
-                  </span>
-                  <span className="text-[10px] font-bold text-on-primary-container">+5%</span>
+                  <span className="text-[10px] font-bold text-on-primary-container uppercase tracking-tighter">CENTRAL HUB</span>
                 </div>
               </div>
-              <p className="text-on-surface-variant text-sm font-medium">Available Stock</p>
-              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">18,209</h2>
+              <p className="text-on-surface-variant text-sm font-medium">Warehouse Total ({data?.warehouseName || "Main"})</p>
+              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">{data?.warehouseStock.toLocaleString() || "0"} <span className="text-sm font-medium text-on-surface-variant italic">units</span></h2>
             </div>
-            
-            {/* Card 3 - Replaced with Expired Product Count */}
+
+            {/* Card 3 - Replaced with Pending Request */}
+            <div className="bg-surface-container-lowest p-6 rounded-xl hover:-translate-y-1 hover:shadow-[0px_24px_48px_rgba(44,47,49,0.06)] transition-all duration-300 border-l-4 border-primary">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <span className="material-symbols-outlined text-primary">sync_alt</span>
+                </div>
+              </div>
+              <p className="text-on-surface-variant text-sm font-medium">Pending Requests</p>
+              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">{pendingRequests.length}</h2>
+              <div className="mt-4 flex items-center gap-1">
+                <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Branch Stock Requests</span>
+              </div>
+            </div>
+
+            {/* Card 4 - Expired Product Count */}
             <div className="bg-surface-container-lowest p-6 rounded-xl hover:-translate-y-1 hover:shadow-[0px_24px_48px_rgba(44,47,49,0.06)] transition-all duration-300">
               <div className="flex justify-between items-start mb-4">
                 <div className="p-2 bg-surface-container-low rounded-lg">
@@ -196,28 +254,57 @@ export default function Dashboard() {
                   <span className="text-[10px] font-bold text-on-error-container">+4.2%</span>
                 </div>
               </div>
-              <p className="text-on-surface-variant text-sm font-medium">Expired Products</p>
-              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">1,240</h2>
+              <p className="text-on-surface-variant text-sm font-medium">Out of Stock Batches</p>
+              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">{data?.outOfStockCount.toLocaleString() || "0"}</h2>
             </div>
-            
+
             {/* Card 4 - Replaced with Monthly Food Waste */}
             <div className="bg-surface-container-lowest p-6 rounded-xl hover:-translate-y-1 hover:shadow-[0px_24px_48px_rgba(44,47,49,0.06)] transition-all duration-300">
               <div className="flex justify-between items-start mb-4">
                 <div className="p-2 bg-surface-container-low rounded-lg">
-                  <span className="material-symbols-outlined text-error-dim">delete_sweep</span>
+                  <span className="material-symbols-outlined text-warning">warning</span>
                 </div>
-                <div className="flex items-center gap-1 bg-error-container/20 px-2 py-1 rounded-full">
-                  <span
-                    className="material-symbols-outlined text-[12px] text-error-dim"
-                    style={{ fontVariationSettings: "'FILL' 1" }}
-                  >
-                    trending_down
-                  </span>
-                  <span className="text-[10px] font-bold text-on-error-container">-2.1%</span>
+                <div className="flex items-center gap-1 bg-warning-container/20 px-2 py-1 rounded-full">
+                  <span className="text-[10px] font-bold text-on-warning-container">ACTION NEEDED</span>
                 </div>
               </div>
-              <p className="text-on-surface-variant text-sm font-medium">Monthly Food Waste</p>
-              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">45.2 kg</h2>
+              <p className="text-on-surface-variant text-sm font-medium">Low Stock Batches</p>
+              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">{data?.lowStockCount.toLocaleString() || "0"}</h2>
+            </div>
+
+            <div className="bg-surface-container-lowest p-6 rounded-xl hover:-translate-y-1 hover:shadow-[0px_24px_48px_rgba(44,47,49,0.06)] transition-all duration-300">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-2 bg-surface-container-low rounded-lg">
+                  <span className="material-symbols-outlined text-warning">timer</span>
+                </div>
+                <div className="flex items-center gap-1 bg-warning-container/20 px-2 py-1 rounded-full">
+                  <span className="text-[10px] font-bold text-on-warning-container uppercase">within 7 days</span>
+                </div>
+              </div>
+              <p className="text-on-surface-variant text-sm font-medium">Soon Expiring</p>
+              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">{data?.expiringCount || "0"}</h2>
+            </div>
+
+            {/* Card 8 - Total Recipes */}
+            <div className="bg-surface-container-lowest p-6 rounded-xl hover:-translate-y-1 hover:shadow-[0px_24px_48px_rgba(44,47,49,0.06)] transition-all duration-300">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-2 bg-surface-container-low rounded-lg">
+                  <span className="material-symbols-outlined text-primary">inventory</span>
+                </div>
+              </div>
+              <p className="text-on-surface-variant text-sm font-medium">Products in Inventory</p>
+              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">{data?.totalProducts || "0"}</h2>
+            </div>
+
+            {/* Card 8 - Total Food Wastage */}
+            <div className="bg-surface-container-lowest p-6 rounded-xl hover:-translate-y-1 hover:shadow-[0px_24px_48px_rgba(44,47,49,0.06)] transition-all duration-300">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-2 bg-surface-container-low rounded-lg">
+                  <span className="material-symbols-outlined text-error">delete_sweep</span>
+                </div>
+              </div>
+              <p className="text-on-surface-variant text-sm font-medium">Total Food Wastage</p>
+              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">{data?.foodWastage.toLocaleString() || "0"} <span className="text-sm font-medium text-on-surface-variant">units</span></h2>
             </div>
           </div>
 
@@ -238,37 +325,21 @@ export default function Dashboard() {
               </div>
               {/* Chart Visualization (SVG CSS) */}
               <div className="h-64 w-full mt-4 flex items-end justify-between px-2 gap-4">
-                <div className="w-full bg-surface-container-low rounded-t-xl h-2/3 group-hover:h-3/4 transition-all duration-700 relative">
-                  <div className="absolute inset-x-0 bottom-0 neon-gradient h-1/2 opacity-20 rounded-t-xl" />
-                </div>
-                <div className="w-full bg-surface-container-low rounded-t-xl h-1/2 group-hover:h-2/3 transition-all duration-700 relative">
-                  <div className="absolute inset-x-0 bottom-0 neon-gradient h-1/2 opacity-40 rounded-t-xl" />
-                </div>
-                <div className="w-full bg-surface-container-low rounded-t-xl h-3/4 group-hover:h-5/6 transition-all duration-700 relative">
-                  <div className="absolute inset-x-0 bottom-0 neon-gradient h-1/2 opacity-60 rounded-t-xl" />
-                </div>
-                <div className="w-full bg-surface-container-low rounded-t-xl h-2/5 group-hover:h-1/2 transition-all duration-700 relative">
-                  <div className="absolute inset-x-0 bottom-0 neon-gradient h-1/2 opacity-30 rounded-t-xl" />
-                </div>
-                <div className="w-full bg-surface-container-low rounded-t-xl h-4/5 group-hover:h-full transition-all duration-700 relative">
-                  <div className="absolute inset-x-0 bottom-0 neon-gradient h-1/2 opacity-80 rounded-t-xl" />
-                </div>
-                <div className="w-full bg-surface-container-low rounded-t-xl h-1/2 group-hover:h-3/5 transition-all duration-700 relative">
-                  <div className="absolute inset-x-0 bottom-0 neon-gradient h-1/2 opacity-50 rounded-t-xl" />
-                </div>
-                <div className="w-full bg-surface-container-low rounded-t-xl h-2/3 group-hover:h-3/4 transition-all duration-700 relative">
-                  <div className="absolute inset-x-0 bottom-0 neon-gradient h-1/2 opacity-20 rounded-t-xl" />
-                </div>
+                {(data?.orderSummary || []).map((item, idx) => (
+                  <div className="w-full bg-surface-container-low rounded-t-xl transition-all duration-700 relative" style={{ height: `${(item.value / 100) * 100}%` }} key={idx}>
+                    <div className="absolute inset-x-0 bottom-0 neon-gradient h-1/2 opacity-20 rounded-t-xl" />
+                  </div>
+                ))}
               </div>
               <div className="flex justify-between mt-4 px-2 text-[10px] font-bold text-on-surface-variant tracking-widest uppercase">
-                <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+                {(data?.orderSummary || []).map((item, idx) => <span key={idx}>{item.day}</span>)}
               </div>
             </div>
-            
-            {/* Profit by Category Donut Chart Mockup */}
+
+            {/* Profit by Category Donut Chart */}
             <div className="bg-surface-container-lowest p-8 rounded-xl flex flex-col items-center justify-center">
               <h3 className="text-xl font-bold tracking-tight text-on-surface mb-2 self-start">Profit by Category</h3>
-              <p className="text-on-surface-variant text-sm mb-8 self-start">Total: $1.2M this year</p>
+              <p className="text-on-surface-variant text-sm mb-8 self-start">Total: ₹{data?.totalProfit.toLocaleString() || "0"} this period</p>
               <div className="relative w-48 h-48 flex items-center justify-center">
                 <svg className="w-full h-full transform -rotate-90">
                   <circle className="text-surface-container-low" cx="96" cy="96" fill="transparent" r="80" stroke="currentColor" strokeWidth="20" />
@@ -276,38 +347,26 @@ export default function Dashboard() {
                   <circle className="text-on-surface" cx="96" cy="96" fill="transparent" r="80" stroke="currentColor" strokeDasharray="502" strokeDashoffset="400" strokeWidth="20" />
                 </svg>
                 <div className="absolute flex flex-col items-center">
-                  <span className="text-2xl font-black tracking-tighter">72%</span>
+                  <span className="text-2xl font-black tracking-tighter">{data?.overallPercentage || "0"}%</span>
                   <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Growth</span>
                 </div>
               </div>
               <div className="w-full mt-8 space-y-3">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-primary" />
-                    <span className="text-xs font-medium">Electronics</span>
+                {(data?.profitByCategory || []).map((item, idx) => (
+                  <div className="flex justify-between items-center" key={idx}>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${item.color === 'primary' ? 'bg-primary' : item.color === 'on-surface' ? 'bg-on-surface' : 'bg-surface-dim'}`} />
+                      <span className="text-xs font-medium">{item.name}</span>
+                    </div>
+                    <span className="text-xs font-bold">{item.percent}%</span>
                   </div>
-                  <span className="text-xs font-bold">45%</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-on-surface" />
-                    <span className="text-xs font-medium">Apparel</span>
-                  </div>
-                  <span className="text-xs font-bold">30%</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-surface-dim" />
-                    <span className="text-xs font-medium">Home Goods</span>
-                  </div>
-                  <span className="text-xs font-bold">25%</span>
-                </div>
+                ))}
               </div>
             </div>
           </div>
 
-          {/* Bottom Section: Stock Levels & Activity */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Bottom Section: Stock Levels & Activity & Requests */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Stock Levels Progress Bars */}
             <div className="bg-surface-container-lowest p-8 rounded-xl">
               <div className="flex justify-between items-center mb-6">
@@ -315,97 +374,43 @@ export default function Dashboard() {
                 <button className="text-xs font-bold text-primary hover:underline">View All Inventory</button>
               </div>
               <div className="space-y-6">
-                <div className="group">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="font-medium text-on-surface">Smart Watch Gen-4</span>
-                    <span className="font-bold text-error">12 left</span>
+                {(data?.stockLevels && data.stockLevels.length > 0) ? data.stockLevels.map((item, idx) => (
+                  <div className="group" key={idx}>
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="font-medium text-on-surface">{item.name}</span>
+                      <span className="font-bold text-error">{item.left} left</span>
+                    </div>
+                    <div className="w-full bg-surface-container-low h-2 rounded-full overflow-hidden">
+                      <div className="bg-error h-full transition-all duration-1000" style={{ width: `${(item.left / (item.total || 100)) * 100}%` }} />
+                    </div>
                   </div>
-                  <div className="w-full bg-surface-container-low h-2 rounded-full overflow-hidden">
-                    <div className="bg-error h-full transition-all duration-1000" style={{ width: "12%" }} />
-                  </div>
-                </div>
-                <div className="group">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="font-medium text-on-surface">Noise Cancelling Headphones</span>
-                    <span className="font-bold text-on-surface-variant">45 left</span>
-                  </div>
-                  <div className="w-full bg-surface-container-low h-2 rounded-full overflow-hidden">
-                    <div className="bg-primary-container h-full transition-all duration-1000" style={{ width: "45%" }} />
-                  </div>
-                </div>
-                <div className="group">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="font-medium text-on-surface">4K Ultra Monitor 32"</span>
-                    <span className="font-bold text-on-surface-variant">28 left</span>
-                  </div>
-                  <div className="w-full bg-surface-container-low h-2 rounded-full overflow-hidden">
-                    <div className="bg-primary h-full transition-all duration-1000" style={{ width: "28%" }} />
-                  </div>
-                </div>
-                <div className="group">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="font-medium text-on-surface">Mechanical Wireless Keyboard</span>
-                    <span className="font-bold text-error">8 left</span>
-                  </div>
-                  <div className="w-full bg-surface-container-low h-2 rounded-full overflow-hidden">
-                    <div className="bg-error-container h-full transition-all duration-1000" style={{ width: "8%" }} />
-                  </div>
-                </div>
+                )) : (
+                  <p className="text-on-surface-variant text-sm">No critical stock alerts.</p>
+                )}
               </div>
             </div>
+
+            
 
             {/* Recent Activity */}
             <div className="bg-surface-container-lowest p-8 rounded-xl">
               <h3 className="text-xl font-bold tracking-tight text-on-surface mb-6">Live Operations</h3>
               <div className="space-y-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full overflow-hidden bg-surface-container">
-                    <img
-                      alt="User"
-                      className="w-full h-full object-cover"
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuBPFlZ2cFSJr9lNgkXxLPfxTr6SXXCct98LvYmKqtQHkb7vZrL12-GgTXkasH9RJl4roBSfH56VXNVOQ7zwAbhEy18mYkOIrEl3xeV9KHq1tpPonpjnwe6mYSHu4OX5rAH3JGj_CEXlC1GlZEcFXDLZFDkhRVhNCbWY-dQRS6OGjACeazTVCCkqN8q8jFndy2KQ4_Zgvt1UrC3qsF_Cy2OlmZbTijunbmsfnPicLO-S-nDj0AbEqKJeTfPFWKzJlHP3O8CjBueyYac"
-                    />
+                {(data?.recentActivity && data.recentActivity.length > 0) ? data.recentActivity.map((log, idx) => (
+                  <div className="flex items-center gap-4" key={idx}>
+                    <div className="w-10 h-10 rounded-full overflow-hidden bg-primary-container flex items-center justify-center">
+                      <span className="material-symbols-outlined text-primary">history</span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-on-surface"><span className="font-bold">{log.action}</span>: {log.details}</p>
+                      <p className="text-[10px] text-on-surface-variant font-bold tracking-widest uppercase">
+                        {new Date(log.timestamp).toLocaleTimeString()}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-on-surface"><span className="font-bold">Sarah Jenkins</span> authorized order #8821</p>
-                    <p className="text-[10px] text-on-surface-variant font-bold tracking-widest uppercase">2 mins ago</p>
-                  </div>
-                  <div className="px-2 py-1 bg-surface-container-low rounded-lg">
-                    <span className="material-symbols-outlined text-sm">chevron_right</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full overflow-hidden bg-surface-container">
-                    <img
-                      alt="User"
-                      className="w-full h-full object-cover"
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuCpYeWI5Ke6stf2b9OzLonlR76lJ610vFbFEbY_XD2Lv_Rv2gmZaRNA0EsB94-l9VkJjQhPQ_G1miGpHtNEGWBQ3qJ9Zrcxy_EY4asVV6lA6Ih-ZD6mq4FwRpuXh6Lm13hgN5kfppoUyWX5DBReWUyLrE_yjjCR6Q-DfyU4XW47vf9j5is-LZRAKK78lwFVRJICKpNyep_bI9I6Y17i0328dBeZUQMrzhXYTfUO-hJX4qOE2GASR-A_q0D_9Lqe6iSz291iMhBtXKA"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-on-surface"><span className="font-bold">Marco Ross</span> updated stock for 'Pro Laptops'</p>
-                    <p className="text-[10px] text-on-surface-variant font-bold tracking-widest uppercase">15 mins ago</p>
-                  </div>
-                  <div className="px-2 py-1 bg-surface-container-low rounded-lg">
-                    <span className="material-symbols-outlined text-sm">chevron_right</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full overflow-hidden bg-surface-container">
-                    <img
-                      alt="User"
-                      className="w-full h-full object-cover"
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5EKJLBcARotXigNoZVcXA_F3Zxnlw5trbAaapaTCBRNPLqV-hZ8XjdQbM1XdWyLccJAFxj-HIda9LS1v9OfaIzrks-C5m8etMuOQbAkUUELC6R3aMoZoCIfQ0j22pSAfzDLBpsy3jB9LuejQcco80twPVmTtPThQYcbR3h-_497WH3-Tg3atGpXjluWLSd5AWCJc3hhJ8o3mQ9J_Uy9ZiS2OgkZEtXAD6Ew0NCZhxPhP1uQX9Ja2DznhA1C96F305FR2rAZuugmY"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-on-surface"><span className="font-bold">Lina Vo</span> flagged 'Out of Stock' alert</p>
-                    <p className="text-[10px] text-on-surface-variant font-bold tracking-widest uppercase">42 mins ago</p>
-                  </div>
-                  <div className="px-2 py-1 bg-surface-container-low rounded-lg">
-                    <span className="material-symbols-outlined text-sm">chevron_right</span>
-                  </div>
-                </div>
+                )) : (
+                  <p className="text-on-surface-variant text-sm">No recent activity.</p>
+                )}
               </div>
             </div>
           </div>

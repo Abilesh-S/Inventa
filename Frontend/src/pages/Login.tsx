@@ -16,43 +16,32 @@ export default function Login() {
     setError(null);
     setLoading(true);
     try {
-      // In a real app, the endpoint might depend on the role. 
-      // Using the existing logic from App.tsx as a base.
-      const res = await fetch(`${API_BASE}/users/login-owner`, {
+      const endpoint = role === "owner" ? `${API_BASE}/users/login-owner` : `${API_BASE}/users/login`;
+      const res = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      
+
       if (!res.ok) {
-        // Fallback for UI testing if the backend is not running
-        if (role === "staff") {
-          localStorage.setItem("user", JSON.stringify({ email, role }));
-          navigate("/dashboard");
-          return;
-        }
         const text = await res.text();
         throw new Error(text || "Login failed");
       }
-      
+
       const user = await res.json();
-      localStorage.setItem("user", JSON.stringify(user));
-      
-      if (role === "staff") {
-        navigate("/dashboard");
+      const auth = btoa(`${email}:${password}`);
+      localStorage.setItem("user", JSON.stringify({ ...user, auth }));
+
+      const userRole = user.role?.toUpperCase();
+      if (userRole === "MANAGER") {
+        navigate("/manager-dashboard");
+      } else if (userRole === "STAFF") {
+        navigate("/staff-dashboard");
       } else {
-        navigate("/owner");
+        navigate("/dashboard");
       }
     } catch (err: any) {
-      // Fallback for UI testing if fetch completely fails (e.g., connection refused)
-      if (role === "staff") {
-        localStorage.setItem("user", JSON.stringify({ email, role }));
-        navigate("/dashboard");
-      } else {
-        setError(err.message || "Login failed");
-      }
+      setError(err.message || "Login failed. Please check your credentials.");
     } finally {
       setLoading(false);
     }
@@ -77,7 +66,7 @@ export default function Login() {
           <div className="hidden lg:block space-y-8">
             <div className="space-y-4">
               <span className="inline-flex px-3 py-1 rounded-full bg-primary-container text-on-primary-container text-xs font-bold tracking-widest uppercase">System 4.0</span>
-              <h2 className="text-5xl font-medium tracking-tight text-on-surface leading-[1.1]">Kinetic Inventory for the Modern Enterprise.</h2>
+              <h2 className="text-5xl font-medium tracking-tight text-on-surface leading-[1.1]">Inventory for the Modern Enterprise.</h2>
               <p className="text-on-surface-variant text-lg max-w-md">Precision analytics meets architectural design. Access your global vitals with a single secure entry.</p>
             </div>
             {/* Stat Card (Kinetic Minimalist) */}
@@ -113,9 +102,9 @@ export default function Login() {
                       onChange={(e) => setRole(e.target.value)}
                       className="w-full appearance-none bg-surface-container-low border-none border-b-2 border-transparent focus:ring-0 focus:border-primary px-4 py-3.5 rounded-lg text-on-surface text-sm transition-all cursor-pointer"
                     >
-                      <option value="staff">Admin</option>
+                      <option value="owner">Owner</option>
                       <option value="manager">Manager</option>
-                      <option value="admin">Staff</option>
+                      <option value="staff">Staff</option>
                     </select>
                     <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-on-surface-variant">
                       <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>expand_more</span>

@@ -2,6 +2,11 @@ import { Route, Routes } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
+import Product from "./pages/Product";
+import WarehouseInventory from "./pages/WarehouseInventory";
+import BranchManagement from "./pages/BranchManagement";
+import ManagerDashboard from "./pages/ManagerDashboard";
+import StaffDashboard from "./pages/StaffDashboard";
 
 function OwnerLayout() {
   return (
@@ -43,6 +48,11 @@ export default function App() {
       <Route path="/register" element={<Register />} />
       <Route path="/owner" element={<OwnerLayout />} />
       <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/product" element={<Product />} />
+      <Route path="/warehouse-inventory" element={<WarehouseInventory />} />
+      <Route path="/branches" element={<BranchManagement />} />
+      <Route path="/manager-dashboard" element={<ManagerDashboard />} />
+      <Route path="/staff-dashboard" element={<StaffDashboard />} />
     </Routes>
   );
 }

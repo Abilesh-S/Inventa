@@ -8,21 +8,20 @@ export default function Register() {
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState("staff");
   const [password, setPassword] = useState("");
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (password.length < 8) {
-        setError("Password must be 8+ characters");
-        return;
+      setError("Password must be 8+ characters");
+      return;
     }
     setError(null);
     setLoading(true);
     try {
-      // Setup logic if needed, simulating for now or pointing to a hypothetical register endpoint
-      // const res = await fetch(`${API_BASE}/users/register`, { ... })
+
       setTimeout(() => {
         alert("Registration requested. Please check your email or wait for approval.");
         navigate("/");
@@ -37,7 +36,7 @@ export default function Register() {
   return (
     <div className="bg-surface text-on-surface font-body min-h-screen flex flex-col w-full overflow-hidden">
       <main className="flex-grow flex flex-col md:flex-row min-h-screen">
-        {/* Left Section with background Image/branding */}
+
         <section className="hidden md:flex md:w-5/12 bg-inverse-surface relative overflow-hidden p-12 flex-col justify-between">
           <div className="relative z-10">
             <div className="flex items-center gap-3 text-primary-fixed mb-12">
@@ -45,27 +44,14 @@ export default function Register() {
               <span className="text-3xl font-semibold tracking-tighter text-white">Ventorie</span>
             </div>
             <h1 className="text-5xl font-medium text-white tracking-tight leading-tight max-w-md">
-              Kinetic inventory <span className="text-primary-fixed italic font-light">management</span> for modern enterprise.
+              Inventory <span className="text-primary-fixed italic font-light">management</span> for modern enterprise.
             </h1>
             <p className="text-on-surface-variant mt-6 text-lg max-w-sm">
               Access real-time logistics data with an editorial-grade interface designed for velocity.
             </p>
           </div>
 
-          <div className="relative z-10 space-y-6">
-            <div className="glass-panel-dark p-6 rounded-xl border-l-4 border-primary-fixed">
-              <p className="text-white font-medium italic">"The most intuitive logistics suite we've deployed this decade."</p>
-              <div className="mt-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full overflow-hidden bg-surface-container-high">
-                  <img className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB_TNbBgVQb3wyVIzo98RbAvLh5BmxsJjOdgMwHNvDeeW18fwbL8HKYktpvKyZn2KhgSUhM_b6yCpFaaeuYL_wN5OfG5u2Z4SRjeZedMRdTGio6SSSeHe1XSycXgwEyMYXLAmyhvqJw_YEOVyYH-KVWLz3frtWC7XJh0YUtoYlUqbbB4o0kOVKpr5oV6l7Lf69xfHPCnAWl0ast9lif-UPJI0GoSqM5gkJ5Lf9ZV2IA1ovHpyu3W9lEEnvY3VY-SigtuqYcVa6RXa8" alt="Portrait" />
-                </div>
-                <div>
-                  <p className="text-white text-sm font-semibold">Julian Pierce</p>
-                  <p className="text-on-surface-variant text-xs">Director of Operations, AeroLogix</p>
-                </div>
-              </div>
-            </div>
-          </div>
+
 
           <div className="absolute top-0 right-0 w-full h-full opacity-20 pointer-events-none">
             <img className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCBIDbPneuRpXxkJJNMueVbAnoP7UcGrjFuC_DmYOyCwSUdk8yom_uf-ztvvTktYdR5wL_M7A0M-NRsB9ioGwYY08wAgTQIIi5eMypTqOs1N76LKj6bHyo56XD8WGh2ahrNzbaEazbNkcdlssZboKk94z_MZhZZx0mu9HyaA-08ZZjk2QTjJ4iUeTT4QC9J8JR3gnPbBhWpTXyuif31TdEvrYhhjVYxoYnrGN1rJnaJCOtUZZwMfr9KoA3OyzsvXoc83QHCQ66xFw8" alt="Warehouse Background" />
@@ -184,8 +170,8 @@ export default function Register() {
                     </button>
                   </div>
                   {error && <p className="text-error text-xs mt-1 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>error_outline</span>
-                      {error}
+                    <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>error_outline</span>
+                    {error}
                   </p>}
                 </div>
 
@@ -207,14 +193,14 @@ export default function Register() {
               </footer>
             </div>
           </div>
-          
+
           {/* Mobile footer, visible on small screens when scrolling down */}
           <footer className="mt-8 md:hidden text-center text-xs text-neutral-500 pb-4">
-             © 2024 Ventorie. Kinetic Inventory Management.
+            © 2024 Ventorie. Kinetic Inventory Management.
           </footer>
         </section>
       </main>
-      
+
       {/* Footer Identity (Desktop absolute or flex) */}
       <footer className="hidden md:flex bg-transparent max-w-7xl w-full px-8 py-8 md:absolute md:bottom-0 md:right-0 xl:right-12 xl:max-w-4xl justify-between items-center z-50 pointer-events-none">
         <p className="font-['Inter'] text-sm tracking-normal text-neutral-500 pointer-events-auto">© 2024 Ventorie. Kinetic Inventory Management.</p>
