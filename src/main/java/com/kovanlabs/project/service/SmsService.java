@@ -16,6 +16,8 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
+import jakarta.annotation.PostConstruct;
+
 @Service
 public class SmsService {
 
@@ -30,7 +32,16 @@ public class SmsService {
                 .build();
     }
 
+    @PostConstruct
+    public void init() {
+        String apiUrl = env.getProperty("sms.api.url");
+        String apiKey = env.getProperty("sms.api.key");
+        logger.info("[SYSTEM] FAST2SMS INITIALIZED - API URL: {} | API KEY LOADED: {}",
+                apiUrl, (apiKey != null && !apiKey.isEmpty() && !apiKey.contains("YOUR_API_KEY")));
+    }
+
     public void sendBillSms(Customer customer, Bill bill) {
+        System.out.println("--- INSIDE SMS SERVICE: " + (customer != null ? customer.getPhone() : "NULL") + " ---");
         String enabled = env.getProperty("sms.enabled", "false");
         logger.info("Entering sendBillSms. Customer: {} | Phone: {} | Config Enabled: {}",
                 customer.getName(), customer.getPhone(), enabled);
@@ -52,13 +63,18 @@ public class SmsService {
 
         String message = buildBillMessage(customer, bill);
 
-        if (isBlank(apiUrl) || isBlank(apiKey) || apiKey.contains("YOUR_API_KEY")) {
-            logger.info("📱 [SIMULATOR] API key missing or default. Bill SMS logged: {}", message);
+        boolean isSimulatorMode = isBlank(apiKey) || apiKey.contains("YOUR_API_KEY") || "SIMULATOR".equalsIgnoreCase(apiKey);
+
+        if (isSimulatorMode) {
+            logger.info(" [SIMULATOR] ********* SMS DISPATCHED *********");
+            logger.info(" [SIMULATOR] TO: {} ({})", customer.getName(), customer.getPhone());
+            logger.info(" [SIMULATOR] MESSAGE: {}", message);
+            logger.info(" [SIMULATOR] ***********************************");
             return;
         }
 
         try {
-            // India route 'q' expects exactly 10 digits.
+
             String cleanNumber = customer.getPhone().replaceAll("\\D", "");
             if (cleanNumber.length() == 12 && cleanNumber.startsWith("91")) {
                 cleanNumber = cleanNumber.substring(2);
@@ -73,8 +89,8 @@ public class SmsService {
                     cleanNumber
             );
 
-            // Log diagnostic info (masking the key)
-            logger.info("Fast2SMS Dispatch: url={}...", apiUrl);
+            logger.info("Attempting Fast2SMS Dispatch to: {}?authorization=[HIDDEN]&message=[HIDDEN]&language={}&route={}&numbers={}",
+                    apiUrl, language, route, cleanNumber);
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(fullUrl))

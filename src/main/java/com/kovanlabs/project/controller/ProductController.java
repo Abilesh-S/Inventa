@@ -21,6 +21,7 @@ public class ProductController {
     @CrossOrigin("http://localhost:5173")
     @GetMapping
     public List<Product> getAllProducts() {
+        System.out.println("--- PRODUCT API HIT ---");
         return service.getAllProducts();
     }
 
