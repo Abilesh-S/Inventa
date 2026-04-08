@@ -4,6 +4,7 @@ import Sidebar from "../components/Sidebar";
 import Header from "../components/Header";
 
 const API_BASE = "http://localhost:8080/Inventa/api";
+const getAuthHeader = (user: any) => user?.token ? `Bearer ${user.token}` : `Basic ${user.auth}`;
 
 interface Product {
     id: number;
@@ -64,7 +65,7 @@ export default function Product() {
         try {
             const user = JSON.parse(localStorage.getItem("user") || "{}");
             const res = await fetch(`${API_BASE}/warehouse/inventory`, {
-                headers: { 'Authorization': `Basic ${user.auth}` }
+                headers: { 'Authorization': getAuthHeader(user) }
             });
             if (res.ok) {
                 const data = await res.json();
@@ -93,11 +94,14 @@ export default function Product() {
         try {
             const user = JSON.parse(localStorage.getItem("user") || "{}");
             const res = await fetch(`${API_BASE}/products`, {
-                headers: { 'Authorization': `Basic ${user.auth}` }
+                headers: { 'Authorization': getAuthHeader(user) }
             });
             if (res.ok) {
                 const data = await res.json();
                 setProducts(data);
+            } else {
+                const msg = await res.text();
+                console.error("Failed to fetch products:", res.status, msg);
             }
         } catch (err) {
             console.error("Failed to fetch products", err);
@@ -173,7 +177,7 @@ export default function Product() {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
-                    'Authorization': `Basic ${user.auth}` 
+                    'Authorization': getAuthHeader(user) 
                 },
                 body: JSON.stringify(payload)
             });
@@ -193,7 +197,7 @@ export default function Product() {
             const user = JSON.parse(localStorage.getItem("user") || "{}");
             const res = await fetch(`${API_BASE}/products/${id}`, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Basic ${user.auth}` }
+                headers: { 'Authorization': getAuthHeader(user) }
             });
             if (res.ok) {
                 fetchProducts();
@@ -232,20 +236,24 @@ export default function Product() {
                         <div className="col-span-2 bg-white p-6 rounded-xl shadow-[0px_24px_48px_rgba(44,47,49,0.06)] flex flex-col justify-between overflow-hidden relative group">
                             <div className="z-10">
                                 <p className="text-[#595c5e] text-sm font-medium mb-1">Total Inventory Value</p>
-                                <h2 className="text-4xl font-extrabold tracking-tight text-[#2c2f31]">₹142,850.00</h2>
+                                <h2 className="text-4xl font-extrabold tracking-tight text-[#2c2f31]">
+                                    ₹{products.reduce((sum, p) => sum + (p.price || 0), 0).toLocaleString()}
+                                </h2>
                             </div>
                             <div className="mt-4 flex items-center gap-2 z-10">
-                                <span className="bg-[#c5fe3c]/20 text-[#455f00] px-2 py-1 rounded-full text-xs font-bold">+12.5%</span>
-                                <span className="text-[#595c5e] text-xs italic">vs last month</span>
+                                <span className="bg-[#c5fe3c]/20 text-[#455f00] px-2 py-1 rounded-full text-xs font-bold">Live</span>
+                                <span className="text-[#595c5e] text-xs italic">Based on current catalog</span>
                             </div>
                             <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-700">
                                 <span className="material-symbols-outlined text-9xl">trending_up</span>
                             </div>
                         </div>
                         <div className="bg-white p-6 rounded-xl shadow-[0px_24px_48px_rgba(44,47,49,0.06)]">
-                            <p className="text-[#595c5e] text-sm font-medium mb-1">Low Stock Alerts</p>
-                            <h2 className="text-4xl font-extrabold tracking-tight text-error">12</h2>
-                            <p className="text-[#595c5e] text-xs mt-4">Items needing immediate reorder</p>
+                            <p className="text-[#595c5e] text-sm font-medium mb-1">Total Products</p>
+                            <h2 className="text-4xl font-extrabold tracking-tight text-[#2c2f31]">
+                                {products.length}
+                            </h2>
+                            <p className="text-[#595c5e] text-xs mt-4">Active SKUs in this business</p>
                         </div>
                         <div className="bg-white p-6 rounded-xl shadow-[0px_24px_48px_rgba(44,47,49,0.06)]">
                             <p className="text-[#595c5e] text-sm font-medium mb-1">Active Recipes</p>

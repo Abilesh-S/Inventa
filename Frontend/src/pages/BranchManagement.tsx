@@ -4,6 +4,7 @@ import Sidebar from "../components/Sidebar";
 import Header from "../components/Header";
 
 const API_BASE = "http://localhost:8080/Inventa/api";
+const getAuthHeader = (user: any) => user?.token ? `Bearer ${user.token}` : `Basic ${user.auth}`;
 
 interface User {
   id: number;
@@ -41,7 +42,7 @@ export default function BranchManagement() {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
       if (!user.business || !user.business.id) return;
       const res = await fetch(`${API_BASE}/branches/business/${user.business.id}`, {
-        headers: { 'Authorization': `Basic ${user.auth}` }
+        headers: { 'Authorization': getAuthHeader(user) }
       });
       if (res.ok) {
         const data = await res.json();
@@ -55,10 +56,10 @@ export default function BranchManagement() {
   const fetchUsers = async () => {
     try {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
-      if (!user.auth) return;
+      if (!user.auth && !user.token) return;
       
       const res = await fetch(`${API_BASE}/users`, {
-        headers: { 'Authorization': `Basic ${user.auth}` }
+        headers: { 'Authorization': getAuthHeader(user) }
       });
       if (res.ok) {
         const data = await res.json();
@@ -103,7 +104,7 @@ export default function BranchManagement() {
 
       const res = await fetch(url, {
         method: method,
-        headers: { "Content-Type": "application/json", 'Authorization': `Basic ${user.auth}` },
+        headers: { "Content-Type": "application/json", 'Authorization': getAuthHeader(user) },
         body: JSON.stringify(payload)
       });
 
@@ -141,7 +142,7 @@ export default function BranchManagement() {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
       const res = await fetch(`${API_BASE}/branches/${id}`, {
         method: "DELETE",
-        headers: { 'Authorization': `Basic ${user.auth}` }
+        headers: { 'Authorization': getAuthHeader(user) }
       });
       if (res.ok) fetchBranches();
     } catch (err) {
@@ -207,7 +208,13 @@ export default function BranchManagement() {
                   </div>
                 </div>
                 <div className="flex gap-3 mt-8 pt-6 border-t border-black/5">
-                  <button className="bg-[#c5fe3c] hover:bg-black hover:text-[#c5fe3c] text-[#364b00] font-black px-6 py-2.5 rounded-xl transition-all uppercase text-[9px] tracking-widest shadow-sm">View Inventory</button>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/branch-inventory/${branch.id}`)}
+                    className="bg-[#c5fe3c] hover:bg-black hover:text-[#c5fe3c] text-[#364b00] font-black px-6 py-2.5 rounded-xl transition-all uppercase text-[9px] tracking-widest shadow-sm"
+                  >
+                    View Inventory
+                  </button>
                   <button onClick={() => handleEditBranch(branch)} className="bg-[#f5f6f8] hover:bg-black hover:text-white text-[#0c0f10] font-black p-2.5 rounded-xl transition-all shadow-sm"><span className="material-symbols-outlined text-sm">edit</span></button>
                   <button onClick={() => handleDeleteBranch(branch.id)} className="bg-[#f5f6f8] hover:bg-error hover:text-white text-[#0c0f10] font-black p-2.5 rounded-xl transition-all shadow-sm"><span className="material-symbols-outlined text-sm">delete</span></button>
                 </div>
@@ -294,21 +301,25 @@ export default function BranchManagement() {
 function QuickAddUserForm({ role, API_BASE, onCreated }: { role: "MANAGER" | "STAFF"; API_BASE: string; onCreated: (u: User) => void }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleCreate = async () => {
-    if (!name || !email || !password) return alert("All fields required");
+    if (!name || !email || !phone || !password) return alert("All fields required");
     setLoading(true);
     try {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
       const res = await fetch(`${API_BASE}/users/create-${role.toLowerCase()}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", 'Authorization': `Basic ${user.auth}` },
-        body: JSON.stringify({ name, email, password })
+        headers: { "Content-Type": "application/json", 'Authorization': getAuthHeader(user) },
+        body: JSON.stringify({ name, email, phone, password })
       });
       if (res.ok) onCreated(await res.json());
-      else alert("Registration failed. Data anomaly detected.");
+      else {
+        const message = await res.text();
+        alert(message || "Registration failed. Data anomaly detected.");
+      }
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
@@ -318,8 +329,12 @@ function QuickAddUserForm({ role, API_BASE, onCreated }: { role: "MANAGER" | "ST
       <div className="space-y-3">
         <input type="text" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-white px-5 py-4 rounded-2xl font-bold text-xs text-[#0c0f10] border-none focus:ring-2 focus:ring-blue-400 outline-none uppercase" />
         <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-white px-5 py-4 rounded-2xl font-bold text-xs text-[#0c0f10] border-none focus:ring-2 focus:ring-blue-400 outline-none" />
+        <input type="tel" placeholder="Phone (10-15 digits)" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full bg-white px-5 py-4 rounded-2xl font-bold text-xs text-[#0c0f10] border-none focus:ring-2 focus:ring-blue-400 outline-none" />
         <input type="password" placeholder="Passphrase" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-white px-5 py-4 rounded-2xl font-bold text-xs text-[#0c0f10] border-none focus:ring-2 focus:ring-blue-400 outline-none" />
       </div>
+      <p className="text-[10px] text-blue-700/80 font-semibold px-1">
+        Password must be 8+ chars with upper, lower, number, and special character.
+      </p>
       <button onClick={handleCreate} disabled={loading} className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg">{loading ? "Authenticating..." : "Register Identity"}</button>
     </div>
   );

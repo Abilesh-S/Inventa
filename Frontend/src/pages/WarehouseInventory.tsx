@@ -4,6 +4,7 @@ import Sidebar from "../components/Sidebar";
 import Header from "../components/Header";
 
 const API_BASE = "http://localhost:8080/Inventa/api";
+const getAuthHeader = (user: any) => user?.token ? `Bearer ${user.token}` : `Basic ${user.auth}`;
 
 interface WarehouseInventoryItem {
   id: number;
@@ -36,12 +37,14 @@ export default function WarehouseInventory() {
   // Notification Hub State
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [lowStockAlerts, setLowStockAlerts] = useState<any[]>([]);
+  const [showLowStock, setShowLowStock] = useState(false);
 
   const fetchInventory = async () => {
     try {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
       const res = await fetch(`${API_BASE}/warehouse/inventory`, {
-        headers: { 'Authorization': `Basic ${user.auth}` }
+        headers: { 'Authorization': getAuthHeader(user) }
       });
       if (res.ok) {
         const data = await res.json();
@@ -56,7 +59,7 @@ export default function WarehouseInventory() {
     try {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
       const res = await fetch(`${API_BASE}/stock-requests/pending`, {
-        headers: { 'Authorization': `Basic ${user.auth}` }
+        headers: { 'Authorization': getAuthHeader(user) }
       });
       if (res.ok) {
         const data = await res.json();
@@ -67,11 +70,26 @@ export default function WarehouseInventory() {
     }
   };
 
+  const fetchLowStockAlerts = async () => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const res = await fetch(`${API_BASE}/alerts/owner/open`, {
+        headers: { 'Authorization': getAuthHeader(user) }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLowStockAlerts(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch low stock alerts", err);
+    }
+  };
+
   const fetchWarehouse = async () => {
     try {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
       const res = await fetch(`${API_BASE}/warehouse`, {
-        headers: { 'Authorization': `Basic ${user.auth}` }
+        headers: { 'Authorization': getAuthHeader(user) }
       });
       if (res.ok) {
         const data = await res.json();
@@ -91,6 +109,7 @@ export default function WarehouseInventory() {
     fetchInventory();
     fetchWarehouse();
     fetchPendingRequests();
+    fetchLowStockAlerts();
 
     // Auto-refresh notifications every 30 seconds
     const interval = setInterval(fetchPendingRequests, 30000);
@@ -122,7 +141,7 @@ export default function WarehouseInventory() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          'Authorization': `Basic ${user.auth}`
+          'Authorization': getAuthHeader(user)
         },
         body: JSON.stringify(payload)
       });
@@ -164,7 +183,7 @@ export default function WarehouseInventory() {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
       const res = await fetch(`${API_BASE}/warehouse/inventory/${id}`, {
         method: "DELETE",
-        headers: { 'Authorization': `Basic ${user.auth}` }
+        headers: { 'Authorization': getAuthHeader(user) }
       });
       if (res.ok) {
         fetchInventory();
@@ -241,6 +260,61 @@ export default function WarehouseInventory() {
               )}
             </div>
 
+            {/* Low stock alerts */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowLowStock(v => !v)}
+                className="relative p-2.5 bg-white border border-[#abadaf]/10 rounded-xl hover:bg-[#eff1f3] transition-colors"
+              >
+                <span className="material-symbols-outlined text-[#0c0f10] text-[22px]">warning</span>
+                {lowStockAlerts.length > 0 && (
+                  <span className="absolute -top-1 -right-1 h-5 w-5 bg-error text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white animate-pulse">
+                    {lowStockAlerts.length}
+                  </span>
+                )}
+              </button>
+
+              {showLowStock && (
+                <div className="absolute right-0 mt-4 w-[320px] bg-white rounded-2xl shadow-2xl border border-black/5 z-[100] overflow-hidden">
+                  <div className="p-4 bg-[#f5f6f8] border-b border-black/5 flex justify-between items-center">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#0c0f10]">Low Stock Alerts</p>
+                    <span className="text-[10px] font-bold text-error">{lowStockAlerts.length} Items</span>
+                  </div>
+                  <div className="max-h-[350px] overflow-y-auto no-scrollbar">
+                    {lowStockAlerts.length === 0 ? (
+                      <div className="p-10 text-center">
+                        <span className="material-symbols-outlined text-[40px] text-[#abadaf] opacity-20 block mb-2">check_circle</span>
+                        <p className="text-xs font-bold text-[#abadaf]">All stock levels are healthy</p>
+                      </div>
+                    ) : (
+                      lowStockAlerts.map((a) => (
+                        <div key={a.id} className="p-4 border-b border-black/5 hover:bg-[#eff1f3]/50 transition-colors">
+                          <div className="flex justify-between items-start mb-1">
+                            <p className="text-sm font-black text-[#0c0f10] uppercase tracking-tighter">{a.ingredientName}</p>
+                            <span className="text-[10px] font-black text-white bg-error px-2 py-0.5 rounded-full">LOW</span>
+                          </div>
+                          <p className="text-[10px] font-bold text-[#595c5e]">
+                            Qty: <span className="text-[#0c0f10]">{a.currentQuantity}</span> • Threshold:{" "}
+                            <span className="text-[#0c0f10]">{a.threshold}</span>
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="p-3 bg-white border-t border-black/5 text-center">
+                    <button
+                      type="button"
+                      onClick={() => { setShowLowStock(false); navigate("/dashboard"); }}
+                      className="text-[10px] font-black text-[#0c0f10] uppercase tracking-widest hover:text-[#496400] transition-colors"
+                    >
+                      View dashboard alerts
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="h-10 w-px bg-black/5 hidden md:block"></div>
 
             <div className="flex items-center gap-2 px-4 py-2 bg-[#eff1f3] border border-[#abadaf]/10 rounded-xl">
@@ -289,9 +363,10 @@ export default function WarehouseInventory() {
                 </div>
                 <span className="text-[10px] font-bold bg-[#eff1f3] px-2 py-1 rounded-full text-[#595c5e] tracking-widest uppercase">Stock</span>
               </div>
-              <p className="text-[#595c5e] text-sm font-medium mb-1">Available Units</p>
+              <p className="text-[#595c5e] text-sm font-medium mb-1">Available units (warehouse)</p>
               <h3 className="text-3xl font-black tracking-tighter">
-                {inventory.reduce((sum, item) => sum + item.quantity, 0).toLocaleString()} <span className="text-sm font-medium text-[#595c5e]">Units</span>
+                {inventory.reduce((sum, item) => sum + item.quantity, 0).toLocaleString()}{" "}
+                <span className="text-sm font-medium text-[#595c5e]">Units</span>
               </h3>
               <div className="mt-4 flex items-center gap-2">
                 <span className="text-[#496400] text-xs font-bold">84% Capacity</span>
@@ -308,7 +383,13 @@ export default function WarehouseInventory() {
               </div>
               <p className="text-[#595c5e] text-sm font-medium mb-1">Low Stock Batches</p>
               <h3 className="text-3xl font-black tracking-tighter">
-                {inventory.filter(i => i.quantity <= i.threshold).length} <span className="text-sm font-medium text-[#595c5e]">Items</span>
+                {inventory.filter(item => {
+                  const today = new Date();
+                  const expireDate = item.expiryDate ? new Date(item.expiryDate) : null;
+                  const isExpired = !!(expireDate && expireDate < today);
+                  return isExpired || item.quantity <= item.threshold;
+                }).length.toLocaleString()}{" "}
+                <span className="text-sm font-medium text-[#595c5e]">Items</span>
               </h3>
               <p className="mt-4 text-[#595c5e] text-[10px] font-medium leading-tight italic">Immediate restock required.</p>
             </div>

@@ -4,11 +4,14 @@ import Sidebar from "../components/Sidebar";
 import Header from "../components/Header";
 
 const API_BASE = "http://localhost:8080/Inventa/api";
+const getAuthHeader = (user: any) => user?.token ? `Bearer ${user.token}` : `Basic ${user.auth}`;
 
 interface DashboardData {
   warehouseName: string;
   totalProducts: number;
   warehouseStock: number;
+  /** Sum of stock units across all branches (matches warehouse inventory KPI). */
+  totalBranchInventoryUnits: number;
   inventoryCount: number;
   outOfStockCount: number;
   lowStockCount: number;
@@ -48,7 +51,7 @@ export default function Dashboard() {
       try {
         const res = await fetch(`${API_BASE}/dashboard/stats`, {
           headers: {
-            'Authorization': `Basic ${user.auth}`
+            'Authorization': getAuthHeader(user)
           }
         });
         if (res.ok) {
@@ -71,7 +74,7 @@ export default function Dashboard() {
     const fetchPendingRequests = async () => {
       try {
         const res = await fetch(`${API_BASE}/stock-requests/pending`, {
-          headers: { 'Authorization': `Basic ${user.auth}` }
+          headers: { 'Authorization': getAuthHeader(user) }
         });
         if (res.ok) setPendingRequests(await res.json());
       } catch (err) {
@@ -97,7 +100,7 @@ export default function Dashboard() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Basic ${user.auth}`
+          "Authorization": getAuthHeader(user)
         },
         body: JSON.stringify({ remark: "Approved by Owner" })
       });
@@ -210,18 +213,27 @@ export default function Dashboard() {
               <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">{data?.totalBranches || "0"}</h2>
             </div>
 
-            {/* Card 2 - Warehouse */}
+            {/* Card 2 - Branch network total + central warehouse context */}
             <div className="bg-surface-container-lowest p-6 rounded-xl hover:-translate-y-1 hover:shadow-[0px_24px_48px_rgba(44,47,49,0.06)] transition-all duration-300">
               <div className="flex justify-between items-center mb-4">
                 <div className="p-2 bg-surface-container-low rounded-lg">
-                  <span className="material-symbols-outlined text-primary">warehouse</span>
+                  <span className="material-symbols-outlined text-primary">inventory_2</span>
                 </div>
                 <div className="flex items-center gap-1 bg-primary-container/20 px-2 py-1 rounded-full">
-                  <span className="text-[10px] font-bold text-on-primary-container uppercase tracking-tighter">CENTRAL HUB</span>
+                  <span className="text-[10px] font-bold text-on-primary-container uppercase tracking-tighter">BRANCH STOCK</span>
                 </div>
               </div>
-              <p className="text-on-surface-variant text-sm font-medium">Warehouse Total ({data?.warehouseName || "Main"})</p>
-              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">{data?.warehouseStock.toLocaleString() || "0"} <span className="text-sm font-medium text-on-surface-variant italic">units</span></h2>
+              <p className="text-on-surface-variant text-sm font-medium">Total units (all branches)</p>
+              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">
+                {Math.round(data?.totalBranchInventoryUnits ?? 0).toLocaleString()}{" "}
+                <span className="text-sm font-medium text-on-surface-variant italic">units</span>
+              </h2>
+              <p className="text-on-surface-variant text-xs font-medium mt-3 leading-snug">
+                Central warehouse ({data?.warehouseName || "Main"}):{" "}
+                <span className="text-on-surface font-bold">
+                  {Math.round(data?.warehouseStock ?? 0).toLocaleString()} units
+                </span>
+              </p>
             </div>
 
             {/* Card 3 - Replaced with Pending Request */}

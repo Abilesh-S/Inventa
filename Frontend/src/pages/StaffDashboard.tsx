@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 const API_BASE = "http://localhost:8080/Inventa/api";
+const getAuthHeader = (user: any) => user?.token ? `Bearer ${user.token}` : `Basic ${user.auth}`;
 
 interface Product {
   id: number;
@@ -61,7 +62,7 @@ export default function StaffDashboard() {
     try {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
       const res = await fetch(`${API_BASE}/products`, {
-        headers: { 'Authorization': `Basic ${user.auth}` }
+        headers: { 'Authorization': getAuthHeader(user) }
       });
       if (res.ok) {
         const data = await res.json();
@@ -76,7 +77,7 @@ export default function StaffDashboard() {
     try {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
       const res = await fetch(`${API_BASE}/bills`, {
-        headers: { 'Authorization': `Basic ${user.auth}` }
+        headers: { 'Authorization': getAuthHeader(user) }
       });
       if (res.ok) {
         const data = await res.json();
@@ -103,7 +104,7 @@ export default function StaffDashboard() {
           method: "POST",
           headers: { 
             "Content-Type": "application/json",
-            'Authorization': `Basic ${userData.auth}` 
+            'Authorization': getAuthHeader(userData) 
           },
           body: JSON.stringify({
             productId: item.id,

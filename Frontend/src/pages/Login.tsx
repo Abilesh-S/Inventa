@@ -16,7 +16,7 @@ export default function Login() {
     setError(null);
     setLoading(true);
     try {
-      const endpoint = role === "owner" ? `${API_BASE}/users/login-owner` : `${API_BASE}/users/login`;
+      const endpoint = `${API_BASE}/users/login-jwt`;
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -28,11 +28,22 @@ export default function Login() {
         throw new Error(text || "Login failed");
       }
 
-      const user = await res.json();
-      const auth = btoa(`${email}:${password}`);
-      localStorage.setItem("user", JSON.stringify({ ...user, auth }));
+      const data = await res.json();
+      const user = data.user;
+      const token = data.token as string | undefined;
+      if (!user || !token) {
+        throw new Error("Invalid login response");
+      }
 
-      const userRole = user.role?.toUpperCase();
+      const selectedRole = role.toUpperCase();
+      const userRole = (user.role || "").toUpperCase();
+      if (selectedRole !== userRole) {
+        throw new Error(`Login role mismatch. Selected ${selectedRole}, account is ${userRole || "UNKNOWN"}.`);
+      }
+
+      const auth = btoa(`${email}:${password}`);
+      localStorage.setItem("user", JSON.stringify({ ...user, auth, token }));
+
       if (userRole === "MANAGER") {
         navigate("/manager-dashboard");
       } else if (userRole === "STAFF") {
@@ -137,6 +148,7 @@ export default function Login() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
+                    autoComplete="current-password"
                       className="w-full bg-surface-container-low border-none border-b-2 border-transparent focus:ring-0 focus:border-primary px-4 py-3.5 rounded-lg text-on-surface text-sm placeholder:text-outline-variant transition-all"
                       placeholder="••••••••"
                     />

@@ -17,8 +17,7 @@ export default function Sidebar() {
     { label: "Branch", icon: "storefront", path: "/branches" },
     { label: "Suppliers", icon: "local_shipping", path: "#" },
     { label: "Billing", icon: "payments", path: "#" },
-    { label: "Orders", icon: "receipt_long", path: "#" },
-    { label: "Delivery", icon: "local_post_office", path: "#" },
+    { label: "Orders", icon: "receipt_long", path: "/warehouse-orders" },
     { label: "Reports", icon: "analytics", path: "#" },
   ];
 

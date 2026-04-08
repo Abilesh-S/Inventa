@@ -1,12 +1,15 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+const API_BASE = "http://localhost:8080/Inventa/api";
+
 export default function Register() {
   const navigate = useNavigate();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [role, setRole] = useState("staff");
+  const [businessName, setBusinessName] = useState("");
+  const [businessLocation, setBusinessLocation] = useState("");
   const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -21,11 +24,43 @@ export default function Register() {
     setError(null);
     setLoading(true);
     try {
+      // 1) Create business first
+      const businessRes = await fetch(`${API_BASE}/business`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: businessName || `${fullName}'s Business`,
+          ownerName: fullName,
+          location: businessLocation || "Not specified",
+        }),
+      });
 
-      setTimeout(() => {
-        alert("Registration requested. Please check your email or wait for approval.");
-        navigate("/");
-      }, 1000);
+      if (!businessRes.ok) {
+        const text = await businessRes.text();
+        throw new Error(text || "Failed to create business");
+      }
+      const business = await businessRes.json();
+
+      // 2) Register owner linked to created business
+      const ownerRes = await fetch(`${API_BASE}/users/register-owner`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: fullName,
+          email,
+          phone,
+          password,
+          businessId: business.id,
+        }),
+      });
+
+      if (!ownerRes.ok) {
+        const text = await ownerRes.text();
+        throw new Error(text || "Owner registration failed");
+      }
+
+      alert("Owner account created successfully. Please login.");
+      navigate("/");
     } catch (err: any) {
       setError(err.message || "Registration failed");
     } finally {
@@ -133,23 +168,32 @@ export default function Register() {
                       placeholder="+1 (555) 000-0000"
                     />
                   </div>
-                  <div className="space-y-1 relative">
-                    <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider px-1" htmlFor="role">Organization Role</label>
-                    <select
-                      id="role"
-                      name="role"
-                      value={role}
-                      onChange={(e) => setRole(e.target.value)}
-                      className="w-full px-4 py-3 bg-surface-container-low border-b border-transparent focus:border-primary focus:ring-0 transition-colors rounded-t-lg text-on-surface appearance-none cursor-pointer"
-                    >
-                      <option value="staff">Staff</option>
-                      <option value="manager">Manager</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                    <div className="absolute inset-y-0 right-3 flex items-center pt-5 pointer-events-none text-on-surface-variant">
-                      <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>expand_more</span>
-                    </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider px-1" htmlFor="business_name">Business Name</label>
+                    <input
+                      id="business_name"
+                      name="business_name"
+                      type="text"
+                      value={businessName}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                      required
+                      className="w-full px-4 py-3 bg-surface-container-low border-b border-transparent focus:border-primary focus:ring-0 transition-colors rounded-t-lg text-on-surface placeholder:text-outline/50"
+                      placeholder="e.g. KFC Branch Group"
+                    />
                   </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider px-1" htmlFor="business_location">Business Location</label>
+                  <input
+                    id="business_location"
+                    name="business_location"
+                    type="text"
+                    value={businessLocation}
+                    onChange={(e) => setBusinessLocation(e.target.value)}
+                    className="w-full px-4 py-3 bg-surface-container-low border-b border-transparent focus:border-primary focus:ring-0 transition-colors rounded-t-lg text-on-surface placeholder:text-outline/50"
+                    placeholder="e.g. Chennai"
+                  />
                 </div>
 
                 <div className="space-y-1">
