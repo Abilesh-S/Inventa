@@ -1,9 +1,11 @@
 package com.kovanlabs.project.controller;
 import com.kovanlabs.project.dto.LoginDTO;
 import com.kovanlabs.project.dto.OwnerDTO;
+import com.kovanlabs.project.dto.ProductDTO;
 import com.kovanlabs.project.model.Role;
 import com.kovanlabs.project.model.User;
 import com.kovanlabs.project.dto.UserDTO;
+import com.kovanlabs.project.service.EmailService;
 import com.kovanlabs.project.service.UserService;
 
 import org.springframework.security.core.Authentication;
@@ -17,9 +19,11 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
+    private final EmailService emailService;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService , EmailService emailService) {
         this.userService = userService;
+        this.emailService = emailService;
     }
 
     @GetMapping
@@ -53,6 +57,17 @@ public class UserController {
     @PostMapping("/create-staff")
     public User createStaff(@RequestBody UserDTO dto, Authentication authentication) {
         return userService.registerBranchUserByOwner(dto, Role.STAFF, authentication.getName());
+    }
+
+    @PostMapping("/verify-email")
+    public String emailVerification(@RequestBody OwnerDTO dto){
+        emailService.sendVerificationEmail(dto.getEmailId());
+        return "Verification email sent successfully";
+    }
+
+    @PostMapping("/validate-otp")
+    public void validateOtp(@RequestBody OwnerDTO dto) {
+        emailService.validateVerificationEmail(dto.getEmailId(), dto.getEmailOtp());
     }
 
 }

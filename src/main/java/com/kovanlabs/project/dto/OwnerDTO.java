@@ -9,6 +9,7 @@ public class OwnerDTO {
     private Business businessDetails;
     private String password ;
     private String emailId ;
+    private String emailOtp;
     private String phoneNo;
     private Branch branch;
 }

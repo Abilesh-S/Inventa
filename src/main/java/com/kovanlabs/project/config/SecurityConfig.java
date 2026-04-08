@@ -82,7 +82,7 @@ public class SecurityConfig {
                 .authenticationProvider(provider)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/register/**","/api/users/register-owner", "/api/users/login-owner", "/api/users/login").permitAll()
+                        .requestMatchers("/register/**","/api/users/register-owner", "/api/users/login-owner", "/api/users/login", "/api/users/verify-email", "/api/users/validate-otp").permitAll()
                         .requestMatchers("/api/users/create-manager", "/api/users/create-staff").hasRole("OWNER")
                         .requestMatchers(HttpMethod.POST, "/api/stock-requests").hasRole("MANAGER")
                         .requestMatchers(HttpMethod.GET, "/api/stock-requests/pending").hasRole("OWNER")

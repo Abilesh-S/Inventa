@@ -164,6 +164,21 @@
       <artifactId>jackson-datatype-jsr310</artifactId>
       <version>2.17.0</version>
     </dependency>
+    <!-- Email Dependency first for Email and 2 is for Java Email -->
+    <!-- Source: https://mvnrepository.com/artifact/org.springframework/spring-context-support -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-context-support</artifactId>
+      <version>6.2.17</version>
+      <scope>compile</scope>
+    </dependency>
+    <!-- Source: https://mvnrepository.com/artifact/com.sun.mail/jakarta.mail -->
+    <dependency>
+      <groupId>com.sun.mail</groupId>
+      <artifactId>jakarta.mail</artifactId>
+      <version>2.0.2</version>
+      <scope>compile</scope>
+    </dependency>
 
   </dependencies>
   <build>

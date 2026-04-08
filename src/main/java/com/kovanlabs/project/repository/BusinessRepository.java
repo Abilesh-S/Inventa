@@ -8,5 +8,5 @@ import java.util.Optional;
 
 @Repository
 public interface BusinessRepository extends JpaRepository<Business, Long> {
-    public Optional<Business> findByNameandOwnerName(String name , String ownerName );
+    public Optional<Business> findByNameAndOwnerName(String name , String ownerName );
 }

@@ -11,6 +11,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class UserService {
@@ -19,20 +20,30 @@ public class UserService {
     private final BusinessRepository businessRepository;
     private final PasswordEncoder passwordEncoder;
     private final BranchRepository branchRepository;
+    private final EmailVerificationRepository emailVerificationRepository;
 
     public UserService(UserRepository userRepository, BusinessRepository businessRepository,
-                       BranchRepository branchRepository, PasswordEncoder passwordEncoder) {
+                       BranchRepository branchRepository, PasswordEncoder passwordEncoder,
+                       EmailVerificationRepository emailVerificationRepository) {
         this.userRepository = userRepository;
         this.businessRepository = businessRepository;
         this.passwordEncoder = passwordEncoder;
         this.branchRepository = branchRepository;
+        this.emailVerificationRepository = emailVerificationRepository;
     }
 
     public User registerOwner(OwnerDTO dto) {
+        EmailVerification verification = emailVerificationRepository.findByEmailId(dto.getEmailId())
+                .orElseThrow(() -> new RuntimeException("Please verify your email first."));
+
+        if (!verification.isVerified()) {
+            throw new RuntimeException("Invalid verification code.");
+        }
+
 //      Create a new Business
         Business details = dto.getBusinessDetails();
         Business business;
-        business = businessRepository.findByNameandOwnerName(details.getName() , details.getOwnerName())
+        business = businessRepository.findByNameAndOwnerName(details.getName() , details.getOwnerName())
                 .orElseGet(() -> {
                     Business newBusiness = new Business();
                     newBusiness.setOwnerName(details.getOwnerName());
@@ -41,7 +52,7 @@ public class UserService {
                     newBusiness.setCreatedAt(details.getCreatedAt());
                     return businessRepository.save(newBusiness);
                 });
-//
+
         User user = new User();
         user.setName(dto.getBusinessDetails().getOwnerName());
         user.setEmail(dto.getEmailId());
@@ -50,6 +61,8 @@ public class UserService {
         user.setRole(Role.OWNER);
         user.setBusiness(business);
         user.setBranch(dto.getBranch());
+        Optional<EmailVerification> emailVerification = emailVerificationRepository.findByEmailId(dto.getEmailId());
+        emailVerificationRepository.delete(emailVerification.get());
         return userRepository.save(user);
     }
 
