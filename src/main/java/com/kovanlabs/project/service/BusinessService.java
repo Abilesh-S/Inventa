@@ -19,7 +19,7 @@ public class BusinessService {
     }
 
     public Business saveBusiness(Business business) {
-        logger.info("Saving new business(Main branch): {}", business.getName());
+        logger.info("Saving new business(Main branch): {}", business.getOwnerName());
         return businessRepository.save(business);
     }
 

@@ -7,9 +7,9 @@
     </appender>
 
     <appender name="FILE" class="ch.qos.logback.core.FileAppender">
-        <file>D:/logs/Inventory_Management_System/application.log</file>
+        <file>C:/logs/Inventory_Management_System/application.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>D:/logs/Inventory_Management_System/application-%d{yyyy-MM-dd}.log</fileNamePattern>
+            <fileNamePattern>C:/logs/Inventory_Management_System/application-%d{yyyy-MM-dd}.log</fileNamePattern>
             <maxHistory>7</maxHistory>
         </rollingPolicy>
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">

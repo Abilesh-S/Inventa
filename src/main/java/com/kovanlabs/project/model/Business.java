@@ -21,6 +21,7 @@ public class Business {
     @Column(name = "owner_name", nullable = false)
     private String ownerName;
 
+    @Column(name = "location")
     private String location;
 
     @Column(name = "created_at")
