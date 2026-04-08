@@ -3,6 +3,8 @@ package com.kovanlabs.project.controller;
 import com.kovanlabs.project.dto.*;
 import com.kovanlabs.project.model.*;
 import com.kovanlabs.project.service.ProductService;
+import com.kovanlabs.project.service.UserService;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -13,16 +15,20 @@ import java.util.List;
 public class ProductController {
 
     private final ProductService service;
+    private final UserService userService;
 
-    public ProductController(ProductService service) {
+    public ProductController(ProductService service, UserService userService) {
         this.service = service;
+        this.userService = userService;
     }
 
     @CrossOrigin("http://localhost:5173")
     @GetMapping
-    public List<Product> getAllProducts() {
+    public List<Product> getAllProducts(Authentication authentication) {
         System.out.println("--- PRODUCT API HIT ---");
-        return service.getAllProducts();
+        User user = userService.findByEmail(authentication.getName());
+        if (user == null || user.getBusiness() == null) throw new RuntimeException("Invalid user context");
+        return service.getAllProducts(user.getBusiness().getId());
     }
 
     @CrossOrigin("http://localhost:5173")
@@ -38,8 +44,10 @@ public class ProductController {
     }
 
     @PostMapping
-    public Product createProduct(@RequestBody ProductDTO dto) {
-        return service.createProduct(dto);
+    public Product createProduct(@RequestBody ProductDTO dto, Authentication authentication) {
+        User user = userService.findByEmail(authentication.getName());
+        if (user == null || user.getBusiness() == null) throw new RuntimeException("Invalid user context");
+        return service.createProduct(dto, user.getBusiness().getId());
     }
 
     @PostMapping("/recipe")

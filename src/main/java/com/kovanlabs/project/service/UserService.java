@@ -9,9 +9,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 @Service
 public class UserService {
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
+
+    private static final Pattern PASSWORD_PATTERN = Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z\\d]).{8,}$");
+    private static final Pattern PHONE_PATTERN = Pattern.compile("^\\d{10,15}$");
 
     private final UserRepository userRepository;
     private final BusinessRepository businessRepository;
@@ -29,13 +34,15 @@ public class UserService {
     }
 
     public User registerOwner(UserDTO dto, Role role) {
+        validateRegistrationFields(dto);
+
         Business business = businessRepository.findById(dto.getBusinessId())
                 .orElseThrow(() -> new RuntimeException("Business not found"));
 
         User user = new User();
         user.setName(dto.getName());
-        user.setEmail(dto.getEmail());
-        user.setPhone(dto.getPhone());
+        user.setEmail(dto.getEmail().trim());
+        user.setPhone(dto.getPhone().trim());
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
         user.setRole(role);
         user.setBusiness(business);
@@ -45,7 +52,7 @@ public class UserService {
     }
 
     public User login(LoginDTO dto) {
-        User user = userRepository.findByEmail(dto.getEmail())
+        User user = userRepository.findByEmail(dto.getEmail().trim())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (!passwordEncoder.matches(dto.getPassword(), user.getPassword())) {
@@ -60,7 +67,7 @@ public class UserService {
     }
 
     public User loginAnyRole(LoginDTO dto) {
-        User user = userRepository.findByEmail(dto.getEmail())
+        User user = userRepository.findByEmail(dto.getEmail().trim())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (!passwordEncoder.matches(dto.getPassword(), user.getPassword())) {
@@ -79,7 +86,6 @@ public class UserService {
             throw new RuntimeException("Only owner can create manager/staff");
         }
 
-        // Default to owner's business if not provided
         Long businessId = dto.getBusinessId();
         if (businessId == null && owner.getBusiness() != null) {
             businessId = owner.getBusiness().getId();
@@ -106,14 +112,12 @@ public class UserService {
             }
         }
 
-        if (userRepository.findByEmail(dto.getEmail()).isPresent()) {
-            throw new RuntimeException("Email already exists");
-        }
+        validateRegistrationFields(dto);
 
         User user = new User();
         user.setName(dto.getName());
-        user.setEmail(dto.getEmail());
-        user.setPhone(dto.getPhone());
+        user.setEmail(dto.getEmail().trim());
+        user.setPhone(dto.getPhone().trim());
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
         user.setRole(role);
         user.setBusiness(business);
@@ -123,6 +127,8 @@ public class UserService {
     }
 
     public User createBranchManager(UserDTO dto) {
+        validateRegistrationFields(dto);
+
         Business business = businessRepository.findById(dto.getBusinessId())
                 .orElseThrow(() -> new RuntimeException("Business not found for ID: " + dto.getBusinessId()));
 
@@ -131,8 +137,8 @@ public class UserService {
 
         User user = new User();
         user.setName(dto.getName());
-        user.setEmail(dto.getEmail());
-        user.setPhone(dto.getPhone());
+        user.setEmail(dto.getEmail().trim());
+        user.setPhone(dto.getPhone().trim());
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
         user.setRole(Role.MANAGER);
         user.setBusiness(business);
@@ -147,5 +153,26 @@ public class UserService {
 
     public List<User> getAllUsers(Long businessId) {
         return userRepository.findByBusinessId(businessId);
+    }
+
+    private void validateRegistrationFields(UserDTO dto) {
+        if (dto.getEmail() == null || !EMAIL_PATTERN.matcher(dto.getEmail().trim()).matches()) {
+            throw new IllegalArgumentException("Invalid email format");
+        }
+        if (dto.getPhone() == null || !PHONE_PATTERN.matcher(dto.getPhone().trim()).matches()) {
+            throw new IllegalArgumentException("Invalid phone format. Use 10 to 15 digits");
+        }
+        if (dto.getPassword() == null || !PASSWORD_PATTERN.matcher(dto.getPassword()).matches()) {
+            throw new IllegalArgumentException("Invalid password format. Min 8 chars with upper, lower, number, special");
+        }
+
+        String normalizedEmail = dto.getEmail().trim();
+        String normalizedPhone = dto.getPhone().trim();
+        if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
+            throw new IllegalArgumentException("Email already exists");
+        }
+        if (userRepository.existsByPhone(normalizedPhone)) {
+            throw new IllegalArgumentException("Phone already exists");
+        }
     }
 }

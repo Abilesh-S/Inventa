@@ -6,6 +6,7 @@ import com.kovanlabs.project.service.BranchInventoryService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/branch-inventory")
@@ -31,6 +32,12 @@ public class BranchInventoryController {
     public BranchInventory getOne(@PathVariable Long branchId, @PathVariable String name) {
         return branchInventoryService.getIngredient(branchId, name);
     }
+    @GetMapping("/business/{businessId}/total-units")
+    public Map<String, Double> getTotalUnitsAcrossBranches(@PathVariable Long businessId) {
+        double total = branchInventoryService.getTotalQuantityAcrossBranches(businessId);
+        return Map.of("totalUnits", total);
+    }
+
 
     @DeleteMapping("/branch/{branchId}/ingredient/{name}")
     public String delete(@PathVariable Long branchId, @PathVariable String name) {

@@ -2,8 +2,10 @@ package com.kovanlabs.project.service;
 
 import com.kovanlabs.project.dto.InventoryDTO;
 import com.kovanlabs.project.dto.WarehouseInventoryDTO;
+import com.kovanlabs.project.model.Business;
 import com.kovanlabs.project.model.Warehouse;
 import com.kovanlabs.project.model.WarehouseInventory;
+import com.kovanlabs.project.repository.BusinessRepository;
 import com.kovanlabs.project.repository.WarehouseInventoryRepository;
 import com.kovanlabs.project.repository.WarehouseRepository;
 import org.slf4j.Logger;
@@ -19,16 +21,18 @@ public class WarehouseInventoryService {
 
     private final WarehouseInventoryRepository inventoryRepository;
     private final WarehouseRepository warehouseRepository;
+    private final BusinessRepository businessRepository;
     private final AuditService auditService;
 
     public WarehouseInventoryService(WarehouseInventoryRepository inventoryRepository,
                                      WarehouseRepository warehouseRepository,
+                                     BusinessRepository businessRepository,
                                      AuditService auditService) {
         this.inventoryRepository = inventoryRepository;
         this.warehouseRepository = warehouseRepository;
+        this.businessRepository = businessRepository;
         this.auditService = auditService;
     }
-
 
     public WarehouseInventory addOrUpdateIngredient(WarehouseInventoryDTO dto) {
         logger.info("Processing ingredient: {} (ID: {}) for warehouse ID: {}",
@@ -63,7 +67,6 @@ public class WarehouseInventoryService {
                 inventory.setQuantity(inventory.getQuantity() + dto.getQuantity());
             }
 
-
             if (dto.getThreshold() != null) inventory.setThreshold(dto.getThreshold());
             if (dto.getUnit() != null) inventory.setUnit(dto.getUnit());
             if (dto.getIngredientName() != null)
@@ -73,6 +76,7 @@ public class WarehouseInventoryService {
                     (dto.getId() != null ? "Updated " : "Merged stock for ") + dto.getIngredientName(),
                     inventory.getId());
         } else {
+
             logger.info("No existing ingredient found for name: {}. Creating new record.", dto.getIngredientName());
             inventory = new WarehouseInventory();
             inventory.setIngredientName(dto.getIngredientName().trim().toLowerCase());
@@ -91,6 +95,12 @@ public class WarehouseInventoryService {
 
     public List<WarehouseInventory> getAllIngredients() {
         return inventoryRepository.findAll();
+    }
+
+    public List<WarehouseInventory> getAllIngredientsByBusiness(Long businessId) {
+        return warehouseRepository.findByBusinessId(businessId)
+                .map(w -> inventoryRepository.findByWarehouseId(w.getId()))
+                .orElseGet(java.util.List::of);
     }
 
     public List<WarehouseInventory> getAllIngredients(Long warehouseId) {
@@ -120,7 +130,6 @@ public class WarehouseInventoryService {
         logger.info("Ingredient with ID: {} deleted successfully", id);
     }
 
-
     public String deleteIngredient(Long warehouseId, String name, String batch) {
 
         WarehouseInventory inventory = getIngredient(warehouseId, name, batch);
@@ -131,10 +140,34 @@ public class WarehouseInventoryService {
         return "Ingredient deleted successfully";
     }
 
+    // ✅ GET UNIQUE INGREDIENT NAMES FOR RECIPE SELECTION
     public List<String> getUniqueIngredientNames() {
         return inventoryRepository.findAll().stream()
                 .map(WarehouseInventory::getIngredientName)
                 .distinct()
                 .toList();
+    }
+
+    public List<String> getUniqueIngredientNamesByBusiness(Long businessId) {
+        return getAllIngredientsByBusiness(businessId).stream()
+                .map(WarehouseInventory::getIngredientName)
+                .distinct()
+                .toList();
+    }
+
+    public Warehouse ensureBusinessWarehouse(Long businessId) {
+        return warehouseRepository.findByBusinessId(businessId).orElseGet(() -> {
+            Business business = businessRepository.findById(businessId)
+                    .orElseThrow(() -> new RuntimeException("Business not found"));
+            Warehouse warehouse = new Warehouse();
+            warehouse.setName((business.getName() == null || business.getName().isBlank())
+                    ? "Main Warehouse"
+                    : business.getName() + " Warehouse");
+            warehouse.setLocation((business.getLocation() == null || business.getLocation().isBlank())
+                    ? "Main Hub"
+                    : business.getLocation());
+            warehouse.setBusiness(business);
+            return warehouseRepository.save(warehouse);
+        });
     }
 }

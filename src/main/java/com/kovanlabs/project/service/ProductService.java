@@ -6,7 +6,6 @@ import com.kovanlabs.project.repository.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-
 import java.util.List;
 
 @Service
@@ -14,14 +13,17 @@ public class ProductService {
     private static final Logger logger = LoggerFactory.getLogger(ProductService.class);
     private final ProductRepository productRepository;
     private final RecipeRepository recipeRepository;
+    private final BusinessRepository businessRepository;
 
     public ProductService(ProductRepository productRepository,
-                          RecipeRepository recipeRepository) {
+                          RecipeRepository recipeRepository,
+                          BusinessRepository businessRepository) {
         this.productRepository = productRepository;
         this.recipeRepository = recipeRepository;
+        this.businessRepository = businessRepository;
     }
-    public List<Product> getAllProducts() {
-        return productRepository.findAll();
+    public List<Product> getAllProducts(Long businessId) {
+        return productRepository.findByBusinessId(businessId);
     }
 
     public Product getProductById(Long id) {
@@ -33,7 +35,7 @@ public class ProductService {
         productRepository.deleteById(id);
     }
 
-    public Product createProduct(ProductDTO dto) {
+    public Product createProduct(ProductDTO dto, Long businessId) {
         logger.info("Saving product: name={}, category={}, price={}",
                 dto.getName(), dto.getCategory(), dto.getPrice());
 
@@ -44,17 +46,23 @@ public class ProductService {
         Product p = null;
 
         if (dto.getId() > 0) {
-            p = productRepository.findById(dto.getId()).orElse(null);
+            Product candidate = productRepository.findById(dto.getId()).orElse(null);
+            if (candidate != null && candidate.getBusiness() != null && businessId.equals(candidate.getBusiness().getId())) {
+                p = candidate;
+            }
         }
 
         // 2. Attempt lookup by Name (Fallback for new entries or ID mismatches)
         if (p == null) {
-            p = productRepository.findByNameIgnoreCase(dto.getName().trim()).orElse(null);
+            p = productRepository.findByNameIgnoreCaseAndBusinessId(dto.getName().trim(), businessId).orElse(null);
         }
 
         if (p == null) {
             logger.info("No existing product found. Creating new Product entity.");
             p = new Product();
+            Business business = businessRepository.findById(businessId)
+                    .orElseThrow(() -> new RuntimeException("Business not found"));
+            p.setBusiness(business);
         } else {
             logger.info("Found existing product: {} (ID: {}). Updating...", p.getName(), p.getId());
         }
@@ -66,6 +74,7 @@ public class ProductService {
         p.setInstructions(dto.getInstructions());
         p.setImageUrl(dto.getImageUrl());
 
+        // ✅ Handle Recipes (Synchronize using managed list + orphanRemoval)
         if (p.getRecipes() == null) {
             p.setRecipes(new java.util.ArrayList<>());
         } else {
@@ -79,12 +88,12 @@ public class ProductService {
                 recipe.setIngredientName(rDto.getIngredientName().trim().toLowerCase());
                 recipe.setQuantity(rDto.getQuantity());
                 recipe.setUnit(rDto.getUnit());
-                recipe.setIngredientId(rDto.getIngredientId());
-                p.getRecipes().add(recipe);
+                recipe.setIngredientId(rDto.getIngredientId()); // Set the ID
+                p.getRecipes().add(recipe); // Add to the list
             }
         }
 
-        p = productRepository.save(p);
+        p = productRepository.save(p); // Saves both product and its recipes
 
         logger.info("Product saved successfully: productId={}", p.getId());
         return p;

@@ -9,6 +9,7 @@ public class DashboardDTO {
     private double warehouseStock;
     private long inventoryCount;
     private long outOfStockCount;
+    private double totalBranchInventoryUnits;
     private long lowStockCount;
     private long expiringCount;
     private long totalBranches;
@@ -48,6 +49,8 @@ public class DashboardDTO {
 
     public double getFoodWastage() { return foodWastage; }
     public void setFoodWastage(double foodWastage) { this.foodWastage = foodWastage; }
+    public double getTotalBranchInventoryUnits() { return totalBranchInventoryUnits; }
+    public void setTotalBranchInventoryUnits(double totalBranchInventoryUnits) { this.totalBranchInventoryUnits = totalBranchInventoryUnits; }
 
     public double getTotalProfit() { return totalProfit; }
     public void setTotalProfit(double totalProfit) { this.totalProfit = totalProfit; }

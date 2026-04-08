@@ -166,6 +166,10 @@ public class OrderService {
     public List<Bill> getAllBills() {
         return billRepository.findAllByOrderByCreatedAtDesc();
     }
+    public List<Bill> getBillsByBranchId(Long branchId) {
+        logger.info("Fetching bills for branchId={}", branchId);
+        return billRepository.findByBranchIdOrderByCreatedAtDesc(branchId);
+    }
 
     private void deductIngredients(Long branchId, Product product, Integer orderedQty) {
         logger.info("Deducting ingredients for productId={}, branchId={}, quantity={}",

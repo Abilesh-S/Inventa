@@ -6,6 +6,8 @@ import com.kovanlabs.project.repository.*;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.TextStyle;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -15,21 +17,27 @@ public class DashboardService {
     private final WarehouseInventoryRepository warehouseInventoryRepository;
     private final WarehouseRepository warehouseRepository;
     private final BranchRepository branchRepository;
+    private final BranchInventoryRepository branchInventoryRepository;
     private final AuditLogRepository auditLogRepository;
     private final BillRepository billRepository;
+    private final BranchInventoryService branchInventoryService;
 
     public DashboardService(ProductRepository productRepository,
                             WarehouseInventoryRepository warehouseInventoryRepository,
                             WarehouseRepository warehouseRepository,
                             BranchRepository branchRepository,
+                            BranchInventoryRepository branchInventoryRepository,
                             AuditLogRepository auditLogRepository,
-                            BillRepository billRepository) {
+                            BillRepository billRepository,
+                            BranchInventoryService branchInventoryService) {
         this.productRepository = productRepository;
         this.warehouseInventoryRepository = warehouseInventoryRepository;
         this.warehouseRepository = warehouseRepository;
         this.branchRepository = branchRepository;
+        this.branchInventoryRepository = branchInventoryRepository;
         this.auditLogRepository = auditLogRepository;
         this.billRepository = billRepository;
+        this.branchInventoryService = branchInventoryService;
     }
 
     public DashboardDTO getStats(User user) {
@@ -52,7 +60,7 @@ public class DashboardService {
                 .count();
         dto.setTotalBranches(branchCount);
 
-        dto.setTotalProducts(productRepository.count());
+        dto.setTotalProducts(productRepository.countByBusinessId(businessId));
 
         List<WarehouseInventory> warehouseItems = warehouseInventoryRepository.findAll()
                 .stream()
@@ -73,6 +81,7 @@ public class DashboardService {
                 .mapToDouble(WarehouseInventory::getQuantity)
                 .sum();
         dto.setWarehouseStock(totalWarehouseStock);
+        dto.setTotalBranchInventoryUnits(branchInventoryService.getTotalQuantityAcrossBranches(businessId));
 
         long outOfStockCount = warehouseItems.stream()
                 .filter(wi -> wi.getQuantity() != null && wi.getQuantity() <= 0)
@@ -81,11 +90,16 @@ public class DashboardService {
                 .count();
         dto.setOutOfStockCount(outOfStockCount);
 
-        long lowStockCount = warehouseItems.stream()
-                .filter(wi -> wi.getIngredientName() != null && wi.getQuantity() != null && wi.getThreshold() != null
-                        && wi.getQuantity() > 0 && wi.getQuantity() <= wi.getThreshold())
-                .map(WarehouseInventory::getIngredientName)
-                .distinct()
+        long lowStockCount = branchInventoryRepository.findByBranch_Business_Id(businessId).stream()
+                .filter(bi -> bi.getIngredientName() != null
+                        && bi.getQuantity() != null
+                        && bi.getThreshold() != null)
+                .filter(bi -> {
+                    boolean qtyLow = bi.getQuantity() > 0 && bi.getQuantity() <= bi.getThreshold();
+                    boolean expired = (bi.getExpiryDate() != null && bi.getExpiryDate().isBefore(today))
+                            || ("EXPIRED".equalsIgnoreCase(bi.getStatus()));
+                    return qtyLow || expired;
+                })
                 .count();
         dto.setLowStockCount(lowStockCount);
 
@@ -112,6 +126,7 @@ public class DashboardService {
         dto.setProfitGrowth(15.8);
         dto.setOverallPercentage(84.0);
 
+        // 8. Categories & Activity
         dto.setProfitByCategory(generateRealProfitByCategory());
 
         try {
@@ -129,7 +144,6 @@ public class DashboardService {
             dto.setRecentActivity(new ArrayList<>());
         }
 
-        // 9. Critical Warehouse Stock Levels
         dto.setStockLevels(warehouseItems.stream()
                 .filter(wi -> wi.getIngredientName() != null && wi.getQuantity() != null && wi.getThreshold() != null && wi.getQuantity() <= wi.getThreshold())
                 .map(wi -> {
@@ -140,7 +154,7 @@ public class DashboardService {
                     return map;
                 }).collect(Collectors.toList()));
 
-        dto.setOrderSummary(generateMockOrderSummary());
+        dto.setOrderSummary(generateWeeklyOrderSummary(today));
 
         return dto;
     }
@@ -167,16 +181,41 @@ public class DashboardService {
         }
     }
 
-    private List<Map<String, Object>> generateMockOrderSummary() {
-        String[] days = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
-        int[] values = {65, 59, 80, 81, 56, 55, 40};
-        List<Map<String, Object>> summary = new ArrayList<>();
-        for(int i=0; i<days.length; i++){
-            Map<String, Object> dayMap = new HashMap<>();
-            dayMap.put("day", days[i]);
-            dayMap.put("value", values[i]);
-            summary.add(dayMap);
+    private List<Map<String, Object>> generateWeeklyOrderSummary(LocalDate today) {
+        try {
+            LocalDate startDate = today.minusDays(6); // 7-day window
+            LocalDateTime start = startDate.atStartOfDay();
+            LocalDateTime end = today.plusDays(1).atStartOfDay(); // exclusive end
+
+            List<Bill> recentBills = billRepository.findByCreatedAtBetween(start, end);
+
+            Map<LocalDate, Long> perDayCounts = new LinkedHashMap<>();
+            for (int i = 0; i < 7; i++) {
+                LocalDate d = startDate.plusDays(i);
+                perDayCounts.put(d, 0L);
+            }
+
+            for (Bill bill : recentBills) {
+                if (bill.getCreatedAt() == null) continue;
+                LocalDate d = bill.getCreatedAt().toLocalDate();
+                if (!perDayCounts.containsKey(d)) continue;
+                perDayCounts.put(d, perDayCounts.get(d) + 1);
+            }
+
+            List<Map<String, Object>> summary = new ArrayList<>();
+            for (Map.Entry<LocalDate, Long> entry : perDayCounts.entrySet()) {
+                Map<String, Object> dayMap = new HashMap<>();
+                String label = entry.getKey()
+                        .getDayOfWeek()
+                        .getDisplayName(TextStyle.SHORT, Locale.ENGLISH);
+                dayMap.put("day", label);
+                dayMap.put("value", entry.getValue().intValue());
+                summary.add(dayMap);
+            }
+            return summary;
+        } catch (Exception e) {
+
+            return new ArrayList<>();
         }
-        return summary;
     }
 }

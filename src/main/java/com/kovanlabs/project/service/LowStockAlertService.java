@@ -1,12 +1,15 @@
 package com.kovanlabs.project.service;
 
 import com.kovanlabs.project.model.*;
+import com.kovanlabs.project.repository.BranchInventoryRepository;
 import com.kovanlabs.project.repository.LowStockAlertRepository;
 import com.kovanlabs.project.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -15,10 +18,14 @@ public class LowStockAlertService {
     private static final Logger logger = LoggerFactory.getLogger(LowStockAlertService.class);
     private final LowStockAlertRepository lowStockAlertRepository;
     private final UserRepository userRepository;
+    private final BranchInventoryRepository branchInventoryRepository;
 
-    public LowStockAlertService(LowStockAlertRepository lowStockAlertRepository, UserRepository userRepository) {
+    public LowStockAlertService(LowStockAlertRepository lowStockAlertRepository,
+                                UserRepository userRepository,
+                                BranchInventoryRepository branchInventoryRepository) {
         this.lowStockAlertRepository = lowStockAlertRepository;
         this.userRepository = userRepository;
+        this.branchInventoryRepository = branchInventoryRepository;
     }
 
     public void createIfLowStock(BranchInventory inventory) {
@@ -101,12 +108,12 @@ public class LowStockAlertService {
             logger.error("Unauthorized access to owner alerts by: {}", ownerEmail);
             throw new RuntimeException("Only owner can view owner alerts");
         }
-        List<LowStockAlert> alerts =
-                lowStockAlertRepository.findByBusinessIdAndStatusOrderByIdDesc(
-                        owner.getBusiness().getId(), AlertStatus.OPEN);
+        List<LowStockAlert> alerts = lowStockAlertRepository.findByBusinessIdAndStatusOrderByIdDesc(
+                owner.getBusiness().getId(), AlertStatus.OPEN);
 
-        logger.info("Found {} open alerts for owner: {}", alerts.size(), ownerEmail);
-        return alerts;
+        List<LowStockAlert> refreshed = refreshAndFilterOpenAlerts(alerts);
+        logger.info("Found {} open alerts for owner after refresh: {}", refreshed.size(), ownerEmail);
+        return refreshed;
     }
 
     public List<LowStockAlert> getManagerOpenAlerts(String managerEmail) {
@@ -121,11 +128,56 @@ public class LowStockAlertService {
             logger.error("Unauthorized access to manager alerts by: {}", managerEmail);
             throw new RuntimeException("Only manager can view manager alerts");
         }
-        List<LowStockAlert> alerts =
-                lowStockAlertRepository.findByBranchIdAndStatusOrderByIdDesc(
-                        manager.getBranch().getId(), AlertStatus.OPEN);
+        List<LowStockAlert> alerts = lowStockAlertRepository.findByBranchIdAndStatusOrderByIdDesc(
+                manager.getBranch().getId(), AlertStatus.OPEN);
 
-        logger.info("Found {} open alerts for manager: {}", alerts.size(), managerEmail);
-        return alerts;
+        List<LowStockAlert> refreshed = refreshAndFilterOpenAlerts(alerts);
+        logger.info("Found {} open alerts for manager after refresh: {}", refreshed.size(), managerEmail);
+        return refreshed;
+    }
+
+    private List<LowStockAlert> refreshAndFilterOpenAlerts(List<LowStockAlert> openAlerts) {
+        if (openAlerts == null || openAlerts.isEmpty()) return openAlerts;
+
+        List<LowStockAlert> result = new ArrayList<>();
+        LocalDate today = LocalDate.now();
+
+        for (LowStockAlert alert : openAlerts) {
+            if (alert == null || alert.getBranch() == null) continue;
+            String ingredientKey = alert.getIngredientName() == null ? "" : alert.getIngredientName().trim();
+            java.util.Optional<BranchInventory> invOpt =
+                    branchInventoryRepository.findByBranchIdAndIngredientNameIgnoreCase(
+                            alert.getBranch().getId(), ingredientKey);
+
+            if (invOpt.isPresent()) {
+                BranchInventory inv = invOpt.get();
+
+                alert.setCurrentQuantity(inv.getQuantity() != null ? inv.getQuantity() : 0.0);
+                alert.setThreshold(inv.getThreshold() != null ? inv.getThreshold() : alert.getThreshold());
+                if (inv.getIngredientName() != null) alert.setIngredientName(inv.getIngredientName().trim().toLowerCase());
+
+                boolean expired = (inv.getExpiryDate() != null && inv.getExpiryDate().isBefore(today))
+                        || ("EXPIRED".equalsIgnoreCase(inv.getStatus()));
+                boolean qtyLow = inv.getQuantity() != null && inv.getThreshold() != null
+                        && inv.getQuantity() > 0 && inv.getQuantity() <= inv.getThreshold();
+
+                if (!(qtyLow || expired)) {
+                    alert.setStatus(AlertStatus.CLOSED);
+                    lowStockAlertRepository.save(alert);
+                    continue;
+                }
+            } else {
+
+                alert.setStatus(AlertStatus.CLOSED);
+                lowStockAlertRepository.save(alert);
+                continue;
+            }
+
+
+            lowStockAlertRepository.save(alert);
+            result.add(alert);
+        }
+
+        return result;
     }
 }

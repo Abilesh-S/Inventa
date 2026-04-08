@@ -1,10 +1,14 @@
 package com.kovanlabs.project.controller;
+
+import com.kovanlabs.project.dto.AuthResponseDTO;
 import com.kovanlabs.project.dto.LoginDTO;
+import com.kovanlabs.project.dto.UserDTO;
 import com.kovanlabs.project.model.Role;
 import com.kovanlabs.project.model.User;
-import com.kovanlabs.project.dto.UserDTO;
+import com.kovanlabs.project.security.JwtService;
 import com.kovanlabs.project.service.UserService;
-
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,14 +20,20 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
+    private final JwtService jwtService;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, JwtService jwtService) {
         this.userService = userService;
+        this.jwtService = jwtService;
     }
 
     @GetMapping
-    public List<User> getAllUsers(org.springframework.security.core.Authentication auth) {
-        User user = userService.findByEmail(auth.getName());
+    public List<User> getAllUsers(Authentication auth) {
+        String email = auth.getName();
+        User user = userService.findByEmail(email);
+        if (user == null || user.getBusiness() == null) {
+            throw new RuntimeException("Current user context invalid");
+        }
         return userService.getAllUsers(user.getBusiness().getId());
     }
 
@@ -31,8 +41,8 @@ public class UserController {
     public Object registerOwner(@RequestBody UserDTO dto) {
         return userService.registerOwner(dto, Role.OWNER);
     }
-    @PostMapping("/login-owner")
 
+    @PostMapping("/login-owner")
     public User loginOwner(@RequestBody LoginDTO dto) {
         return userService.login(dto);
     }
@@ -42,7 +52,12 @@ public class UserController {
         return userService.loginAnyRole(dto);
     }
 
-
+    @PostMapping("/login-jwt")
+    public AuthResponseDTO loginJwt(@RequestBody LoginDTO dto) {
+        User user = userService.loginAnyRole(dto);
+        String token = jwtService.generateToken(user.getEmail(), user.getRole().name());
+        return new AuthResponseDTO(user, token);
+    }
 
     @PostMapping("/create-manager")
     public User createManager(@RequestBody UserDTO dto, Authentication authentication) {
@@ -54,4 +69,8 @@ public class UserController {
         return userService.registerBranchUserByOwner(dto, Role.STAFF, authentication.getName());
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<String> handleValidationError(IllegalArgumentException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
+    }
 }

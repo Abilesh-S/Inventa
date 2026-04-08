@@ -14,11 +14,14 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.http.HttpMethod;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import com.kovanlabs.project.security.JwtAuthenticationFilter;
 
 import java.util.Arrays;
 
@@ -59,14 +62,19 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, DaoAuthenticationProvider provider) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http,
+                                           DaoAuthenticationProvider provider,
+                                           JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(provider)
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/users/register-owner", "/api/users/login-owner", "/api/users/login").permitAll()
+                        .requestMatchers("/api/users/register-owner", "/api/users/login-owner", "/api/users/login", "/api/users/login-jwt").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/business").permitAll()
                         .requestMatchers("/api/users/create-manager", "/api/users/create-staff").hasRole("OWNER")
                         .requestMatchers(HttpMethod.POST, "/api/stock-requests").hasRole("MANAGER")
                         .requestMatchers(HttpMethod.GET, "/api/stock-requests/pending").hasRole("OWNER")

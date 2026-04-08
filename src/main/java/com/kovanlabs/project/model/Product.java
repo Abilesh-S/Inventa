@@ -1,5 +1,6 @@
 package com.kovanlabs.project.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import java.util.List;
@@ -19,6 +20,11 @@ public class Product {
     @Column(length = 2000)
     private String instructions;
     private String imageUrl;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "business_id")
+    @JsonIgnore
+    private Business business;
 
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.EAGER, orphanRemoval = true)
@@ -47,6 +53,8 @@ public class Product {
     public void setInstructions(String instructions) { this.instructions = instructions; }
     public String getImageUrl() { return imageUrl; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+    public Business getBusiness() { return business; }
+    public void setBusiness(Business business) { this.business = business; }
 
     public void setId(Long id) {
         this.id = id;

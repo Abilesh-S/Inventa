@@ -27,4 +27,12 @@ public class BillController {
             return org.springframework.http.ResponseEntity.status(500).body("History Retrieval failed: " + e.getMessage());
         }
     }
+    @GetMapping("/branch/{branchId}")
+    public org.springframework.http.ResponseEntity<?> getByBranch(@PathVariable Long branchId) {
+        try {
+            return org.springframework.http.ResponseEntity.ok(orderService.getBillsByBranchId(branchId));
+        } catch (Exception e) {
+            return org.springframework.http.ResponseEntity.status(500).body("Branch history retrieval failed: " + e.getMessage());
+        }
+    }
 }

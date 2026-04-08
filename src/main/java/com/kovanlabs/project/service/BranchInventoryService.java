@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 public class BranchInventoryService {
@@ -54,7 +55,7 @@ public class BranchInventoryService {
                 auditService.log("STOCK_UPDATED", "BranchInventory", "Edited " + name + " to " + dto.getQuantity(), inventory.getId());
             } else {
                 logger.info("Name-based Merge (Name: {}). Adding {} to existing {}", name, dto.getQuantity(), inventory.getQuantity());
-                inventory.setQuantity(inventory.getQuantity() + dto.getQuantity()); // INCREMENT for duplicates
+                inventory.setQuantity(inventory.getQuantity() + dto.getQuantity());
                 auditService.log("STOCK_UPDATED", "BranchInventory", "Merged " + name + " added " + dto.getQuantity(), inventory.getId());
             }
         } else {
@@ -69,7 +70,7 @@ public class BranchInventoryService {
         inventory.setIngredientName(name);
         inventory.setBatchNumber(dto.getBatchNumber());
         inventory.setExpiryDate(dto.getExpiryDate());
-        inventory.setStatus(dto.getStatus());
+        inventory.setStatus(dto.getStatus() == null || dto.getStatus().isBlank() ? "ACTIVE" : dto.getStatus());
 
         boolean isNew = (inventory.getId() == null);
         BranchInventory savedInventory = branchInventoryRepository.save(inventory);
@@ -86,6 +87,13 @@ public class BranchInventoryService {
     public List<BranchInventory> getAllIngredients(Long branchId) {
         logger.info("Fetching all ingredients for branch ID: {}", branchId);
         return branchInventoryRepository.findByBranchId(branchId);
+    }
+
+
+    public double getTotalQuantityAcrossBranches(Long businessId) {
+        return branchInventoryRepository.findByBranch_Business_Id(businessId).stream()
+                .mapToDouble(bi -> Objects.requireNonNullElse(bi.getQuantity(), 0.0))
+                .sum();
     }
 
 

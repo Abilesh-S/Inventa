@@ -7,8 +7,6 @@ import com.kovanlabs.project.repository.BusinessRepository;
 import com.kovanlabs.project.repository.WarehouseRepository;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-
 @Service
 public class WarehouseService {
 
@@ -36,9 +34,31 @@ public class WarehouseService {
         warehouse.setBusiness(business);
 
         return warehouseRepository.save(warehouse);
-
     }
-    public List<Warehouse> getWarehouses() {
+
+    public java.util.List<Warehouse> getWarehouses() {
         return warehouseRepository.findAll();
+    }
+
+    public java.util.List<Warehouse> getWarehousesByBusiness(Long businessId) {
+        return warehouseRepository.findByBusinessId(businessId)
+                .map(java.util.List::of)
+                .orElseGet(java.util.List::of);
+    }
+
+    public Warehouse getOrCreateWarehouseForBusiness(Long businessId) {
+        return warehouseRepository.findByBusinessId(businessId).orElseGet(() -> {
+            Business business = businessRepository.findById(businessId)
+                    .orElseThrow(() -> new RuntimeException("Business not found"));
+            Warehouse warehouse = new Warehouse();
+            warehouse.setName((business.getName() == null || business.getName().isBlank())
+                    ? "Main Warehouse"
+                    : business.getName() + " Warehouse");
+            warehouse.setLocation((business.getLocation() == null || business.getLocation().isBlank())
+                    ? "Main Hub"
+                    : business.getLocation());
+            warehouse.setBusiness(business);
+            return warehouseRepository.save(warehouse);
+        });
     }
 }
