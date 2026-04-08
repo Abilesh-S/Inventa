@@ -2,6 +2,7 @@ package com.kovanlabs.project.config;
 
 import com.kovanlabs.project.model.User;
 import com.kovanlabs.project.repository.UserRepository;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -16,6 +17,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -57,16 +59,30 @@ public class SecurityConfig {
     public AuthenticationManager authenticationManager(DaoAuthenticationProvider provider) {
         return new ProviderManager(provider);
     }
+    @Bean
+    public AuthenticationFailureHandler authenticationFailureHandler() {
+        return (request, response, exception) -> {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json");
+
+            response.getWriter().write("""
+            {
+                "error": "Invalid username or password"
+            }
+        """);
+        };
+    }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, DaoAuthenticationProvider provider) throws Exception {
         http
+
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
                 .authenticationProvider(provider)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/users/register-owner", "/api/users/login-owner", "/api/users/login").permitAll()
+                        .requestMatchers("/register/**","/api/users/register-owner", "/api/users/login-owner", "/api/users/login").permitAll()
                         .requestMatchers("/api/users/create-manager", "/api/users/create-staff").hasRole("OWNER")
                         .requestMatchers(HttpMethod.POST, "/api/stock-requests").hasRole("MANAGER")
                         .requestMatchers(HttpMethod.GET, "/api/stock-requests/pending").hasRole("OWNER")
@@ -82,7 +98,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/dashboard/**").hasAnyRole("OWNER", "MANAGER", "STAFF")
                         .anyRequest().authenticated()
                 )
-                .httpBasic(Customizer.withDefaults());
+                .httpBasic(Customizer.withDefaults())
+                .formLogin(form -> form
+                        .failureHandler(authenticationFailureHandler())
+                );;
 
         return http.build();
     }

@@ -1,5 +1,6 @@
 package com.kovanlabs.project.controller;
 import com.kovanlabs.project.dto.LoginDTO;
+import com.kovanlabs.project.dto.OwnerDTO;
 import com.kovanlabs.project.model.Role;
 import com.kovanlabs.project.model.User;
 import com.kovanlabs.project.dto.UserDTO;
@@ -28,8 +29,8 @@ public class UserController {
     }
 
     @PostMapping("/register-owner")
-    public Object registerOwner(@RequestBody UserDTO dto) {
-        return userService.registerOwner(dto, Role.OWNER);
+    public Object registerOwner(@RequestBody OwnerDTO dto) {
+        return userService.registerOwner(dto);
     }
     @PostMapping("/login-owner")
 
