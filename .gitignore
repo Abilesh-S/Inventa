@@ -3,7 +3,7 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 .kotlin
-!**/src/main/java/com/kovanlabs/project/config
+src/main/java/com/kovanlabs/project/config/**
 
 ### IntelliJ IDEA ###
 .idea/modules.xml
