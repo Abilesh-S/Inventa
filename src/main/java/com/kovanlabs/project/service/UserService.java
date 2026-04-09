@@ -23,8 +23,8 @@ public class UserService {
     private final EmailVerificationRepository emailVerificationRepository;
 
     public UserService(UserRepository userRepository, BusinessRepository businessRepository,
-                       BranchRepository branchRepository, PasswordEncoder passwordEncoder,
-                       EmailVerificationRepository emailVerificationRepository) {
+            BranchRepository branchRepository, PasswordEncoder passwordEncoder,
+            EmailVerificationRepository emailVerificationRepository) {
         this.userRepository = userRepository;
         this.businessRepository = businessRepository;
         this.passwordEncoder = passwordEncoder;
@@ -40,10 +40,10 @@ public class UserService {
             throw new RuntimeException("Invalid verification code.");
         }
 
-//      Create a new Business
+        // Create a new Business
         Business details = dto.getBusinessDetails();
         Business business;
-        business = businessRepository.findByNameAndOwnerName(details.getName() , details.getOwnerName())
+        business = businessRepository.findByNameAndOwnerName(details.getName(), details.getOwnerName())
                 .orElseGet(() -> {
                     Business newBusiness = new Business();
                     newBusiness.setOwnerName(details.getOwnerName());
@@ -61,8 +61,8 @@ public class UserService {
         user.setRole(Role.OWNER);
         user.setBusiness(business);
         user.setBranch(dto.getBranch());
-        Optional<EmailVerification> emailVerification = emailVerificationRepository.findByEmailId(dto.getEmailId());
-        emailVerificationRepository.delete(emailVerification.get());
+        
+        emailVerificationRepository.delete(verification);
         return userRepository.save(user);
     }
 
@@ -136,27 +136,8 @@ public class UserService {
         user.setName(dto.getName());
         user.setEmail(dto.getEmail());
         user.setPhone(dto.getPhone());
-        user.setPassword(passwordEncoder.encode(dto.getPassword()));
         user.setRole(role);
-        user.setBusiness(business);
-        user.setBranch(branch);
-
-        return userRepository.save(user);
-    }
-
-    public User createBranchManager(UserDTO dto) {
-        Business business = businessRepository.findById(dto.getBusinessId())
-                .orElseThrow(() -> new RuntimeException("Business not found for ID: " + dto.getBusinessId()));
-
-        Branch branch = branchRepository.findById(dto.getBranchId())
-                .orElseThrow(() -> new RuntimeException("Branch not found for ID: " + dto.getBranchId()));
-
-        User user = new User();
-        user.setName(dto.getName());
-        user.setEmail(dto.getEmail());
-        user.setPhone(dto.getPhone());
-        user.setPassword(passwordEncoder.encode(dto.getPassword()));
-        user.setRole(Role.MANAGER);
+        user.setPassword(passwordEncoder.encode(dto.getEmail()));
         user.setBusiness(business);
         user.setBranch(branch);
 
@@ -169,5 +150,15 @@ public class UserService {
 
     public List<User> getAllUsers(Long businessId) {
         return userRepository.findByBusinessId(businessId);
+    }
+
+    public void updateExistingUserDetails(UserDTO dto) {
+        Optional<User> user = userRepository.findByEmail(dto.getEmail());
+        if(user.isPresent()){
+            User updateUser = user.get();
+            updateUser.setName(dto.getName());
+            updateUser.setPhone(dto.getPhone());
+        }
+
     }
 }

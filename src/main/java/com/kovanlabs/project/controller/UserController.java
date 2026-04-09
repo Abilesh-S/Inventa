@@ -1,4 +1,5 @@
 package com.kovanlabs.project.controller;
+
 import com.kovanlabs.project.dto.LoginDTO;
 import com.kovanlabs.project.dto.OwnerDTO;
 import com.kovanlabs.project.dto.ProductDTO;
@@ -21,7 +22,7 @@ public class UserController {
     private final UserService userService;
     private final EmailService emailService;
 
-    public UserController(UserService userService , EmailService emailService) {
+    public UserController(UserService userService, EmailService emailService) {
         this.userService = userService;
         this.emailService = emailService;
     }
@@ -36,6 +37,7 @@ public class UserController {
     public Object registerOwner(@RequestBody OwnerDTO dto) {
         return userService.registerOwner(dto);
     }
+
     @PostMapping("/login-owner")
 
     public User loginOwner(@RequestBody LoginDTO dto) {
@@ -46,8 +48,6 @@ public class UserController {
     public User login(@RequestBody LoginDTO dto) {
         return userService.loginAnyRole(dto);
     }
-
-
 
     @PostMapping("/create-manager")
     public User createManager(@RequestBody UserDTO dto, Authentication authentication) {
@@ -60,7 +60,7 @@ public class UserController {
     }
 
     @PostMapping("/verify-email")
-    public String emailVerification(@RequestBody OwnerDTO dto){
+    public String emailVerification(@RequestBody OwnerDTO dto) {
         emailService.sendVerificationEmail(dto.getEmailId());
         return "Verification email sent successfully";
     }
@@ -70,4 +70,14 @@ public class UserController {
         emailService.validateVerificationEmail(dto.getEmailId(), dto.getEmailOtp());
     }
 
+    @GetMapping("/me")
+    public User getCurrentUser(Authentication auth) {
+        return userService.findByEmail(auth.getName());
+    }
+
+    @PutMapping("/update-profile")
+    public void updateUserDetails(@RequestBody UserDTO dto, Authentication auth){
+        dto.setEmail(auth.getName());
+        userService.updateExistingUserDetails(dto);
+    }
 }

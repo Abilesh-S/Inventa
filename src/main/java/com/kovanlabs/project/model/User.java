@@ -25,7 +25,6 @@ public class User {
     @JoinColumn(name = "business_id", nullable = false)
     private Business business;
 
-
     @ManyToOne
     @JoinColumn(name = "branch_id")
     private Branch branch;
