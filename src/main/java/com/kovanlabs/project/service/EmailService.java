@@ -55,5 +55,27 @@ public class EmailService {
             throw new RuntimeException("Invalid verification code. Please try again.");
         }
     }
+    @Transactional
+    public String oneTimePasswordforAccountCreation(String email){
+        try {
+            MimeMessage message = javaMailSender.createMimeMessage();
+            MimeMessageHelper messageHelper = new MimeMessageHelper(message, true);
+            messageHelper.setFrom("abilesh1545@gmail.com");
+            messageHelper.setTo(email);
+            messageHelper.setSubject("Welcome To Ventorie :");
+            String oneTimePassword = String.valueOf((int)(Math.random() * 900000) + 100000);
+            messageHelper.setText(
+                    "<h2>Welcome to Ventorie</h2>" +
+                            "<p> Your Password for you account is "+oneTimePassword+" </p><br/><p>Please Make sure you change password after login</p>",
+                    true);
+
+            javaMailSender.send(message);
+            return oneTimePassword;
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new PasswordVerifyEmailException("Error Occurred during email sending: " + e.getMessage());
+        }
+    }
+
 
 }

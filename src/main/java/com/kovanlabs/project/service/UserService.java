@@ -3,6 +3,7 @@ package com.kovanlabs.project.service;
 import com.kovanlabs.project.dto.LoginDTO;
 import com.kovanlabs.project.dto.OwnerDTO;
 import com.kovanlabs.project.dto.UserDTO;
+import com.kovanlabs.project.dto.UserUpdateDTO;
 import com.kovanlabs.project.model.*;
 import com.kovanlabs.project.repository.*;
 import jakarta.transaction.Transactional;
@@ -21,15 +22,17 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final BranchRepository branchRepository;
     private final EmailVerificationRepository emailVerificationRepository;
+    private final EmailService emailService;
 
     public UserService(UserRepository userRepository, BusinessRepository businessRepository,
             BranchRepository branchRepository, PasswordEncoder passwordEncoder,
-            EmailVerificationRepository emailVerificationRepository) {
+            EmailVerificationRepository emailVerificationRepository , EmailService emailService) {
         this.userRepository = userRepository;
         this.businessRepository = businessRepository;
         this.passwordEncoder = passwordEncoder;
         this.branchRepository = branchRepository;
         this.emailVerificationRepository = emailVerificationRepository;
+        this.emailService = emailService;
     }
 
     public User registerOwner(OwnerDTO dto) {
@@ -93,7 +96,7 @@ public class UserService {
     }
 
     @Transactional
-    public User registerBranchUserByOwner(UserDTO dto, Role role, String ownerEmail) {
+    public User registerBranchUsersByOwner(UserDTO dto, Role role, String ownerEmail) {
         User owner = userRepository.findByEmail(ownerEmail)
                 .orElseThrow(() -> new RuntimeException("Owner user not found"));
 
@@ -137,7 +140,63 @@ public class UserService {
         user.setEmail(dto.getEmail());
         user.setPhone(dto.getPhone());
         user.setRole(role);
-        user.setPassword(passwordEncoder.encode(dto.getEmail()));
+        user.setPassword(passwordEncoder.encode(emailService.oneTimePasswordforAccountCreation(dto.getEmail())));
+        user.setBusiness(business);
+        user.setBranch(branch);
+
+        return userRepository.save(user);
+    }
+
+    @Transactional
+    public User registerStaffByManager(UserDTO dto, String managerEmail) {
+
+        // 1. Fetch Manager
+        User manager = userRepository.findByEmail(managerEmail)
+                .orElseThrow(() -> new RuntimeException("Manager not found"));
+
+        // 2. Role Check
+        if (manager.getRole() != Role.MANAGER) {
+            throw new RuntimeException("Only managers can add staff");
+        }
+
+        // 3. Validate Manager Assignment
+        Business business = manager.getBusiness();
+        Branch managerBranch = manager.getBranch();
+
+        if (business == null || managerBranch == null) {
+            throw new RuntimeException("Manager must belong to a business and branch");
+        }
+
+        // 4. Validate Branch
+        if (dto.getBranchId() == null) {
+            throw new RuntimeException("Branch ID is required");
+        }
+
+        Branch branch = branchRepository.findById(dto.getBranchId())
+                .orElseThrow(() -> new RuntimeException("Invalid branch"));
+
+        // 5. Check Branch belongs to manager's business
+        if (!branch.getBusiness().getId().equals(business.getId())) {
+            throw new RuntimeException("Branch does not belong to manager's business");
+        }
+
+        // 6. Check Manager can only add staff to their own branch
+        if (!branch.getId().equals(managerBranch.getId())) {
+            throw new RuntimeException("Manager can only add staff to their own branch");
+        }
+
+        // 7. Email uniqueness check
+        if (userRepository.findByEmail(dto.getEmail()).isPresent()) {
+            throw new RuntimeException("Email already exists");
+        }
+
+        // 8. Create Staff
+        User user = new User();
+        user.setName(dto.getName());
+        user.setEmail(dto.getEmail());
+        user.setPhone(dto.getPhone());
+        user.setRole(Role.STAFF);
+        user.setPassword(passwordEncoder.encode(emailService.oneTimePasswordforAccountCreation(dto.getEmail())));
         user.setBusiness(business);
         user.setBranch(branch);
 
@@ -151,14 +210,24 @@ public class UserService {
     public List<User> getAllUsers(Long businessId) {
         return userRepository.findByBusinessId(businessId);
     }
+    
+    public List<User> getUsersByBranch(Long branchId) {
+        return userRepository.findByBranchId(branchId);
+    }
 
-    public void updateExistingUserDetails(UserDTO dto) {
-        Optional<User> user = userRepository.findByEmail(dto.getEmail());
-        if(user.isPresent()){
-            User updateUser = user.get();
-            updateUser.setName(dto.getName());
-            updateUser.setPhone(dto.getPhone());
+    @Transactional
+    public void updateExistingUserDetails(UserUpdateDTO dto) {
+        User user = userRepository.findByEmail(dto.getEmail())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        user.setName(dto.getName());
+        user.setPhone(dto.getPhone());
+        if (dto.getPassword() != null && !dto.getPassword().trim().isEmpty()) {
+            if (passwordEncoder.matches(dto.getOldPassword(), user.getPassword())) {
+                user.setPassword(passwordEncoder.encode(dto.getPassword()));
+            } else {
+                throw new RuntimeException("Current password is not valid");
+            }
         }
-
+        userRepository.save(user);
     }
 }
