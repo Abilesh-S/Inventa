@@ -119,6 +119,21 @@ public class StockRequestService {
         );
     }
 
+    public List<StockRequest> getPendingForOwnerByBranch(String ownerEmail, Long branchId) {
+        logger.info("Fetching pending stock requests for owner={}, branchId={}", ownerEmail, branchId);
+        User owner = userRepository.findByEmail(ownerEmail)
+                .orElseThrow(() -> new RuntimeException("Owner not found"));
+
+        if (owner.getRole() != Role.OWNER || owner.getBusiness() == null) {
+            throw new RuntimeException("Only owner can view pending requests");
+        }
+
+        return stockRequestRepository.findByBranchIdAndStatusOrderByIdDesc(
+                branchId,
+                StockRequestStatus.PENDING
+        );
+    }
+
     public List<StockRequest> getRequestsForManager(String managerEmail) {
         logger.info("Fetching stock requests for manager={}", managerEmail);
         User manager = userRepository.findByEmail(managerEmail)

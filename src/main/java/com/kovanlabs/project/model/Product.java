@@ -26,6 +26,11 @@ public class Product {
     @JsonIgnore
     private Business business;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "branch_id", nullable = true)
+    @JsonIgnore
+    private Branch branch;
+
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.EAGER, orphanRemoval = true)
     private List<Recipe> recipes;
@@ -55,6 +60,8 @@ public class Product {
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
     public Business getBusiness() { return business; }
     public void setBusiness(Business business) { this.business = business; }
+    public Branch getBranch() { return branch; }
+    public void setBranch(Branch branch) { this.branch = branch; }
 
     public void setId(Long id) {
         this.id = id;

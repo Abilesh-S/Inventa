@@ -2,7 +2,10 @@ package com.kovanlabs.project.controller;
 
 import com.kovanlabs.project.dto.BranchDTO;
 import com.kovanlabs.project.model.Branch;
+import com.kovanlabs.project.model.User;
+import com.kovanlabs.project.repository.UserRepository;
 import com.kovanlabs.project.service.BranchService;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -12,9 +15,11 @@ import java.util.List;
 public class BranchController {
 
     private final BranchService branchService;
+    private final UserRepository userRepository;
 
-    public BranchController(BranchService branchService) {
+    public BranchController(BranchService branchService, UserRepository userRepository) {
         this.branchService = branchService;
+        this.userRepository = userRepository;
     }
 
     @PostMapping
@@ -26,6 +31,19 @@ public class BranchController {
     @GetMapping("/business/{businessId}")
     public List<com.kovanlabs.project.dto.BranchResponseDTO> getAll(@PathVariable Long businessId) {
         return branchService.getAllBranches(businessId);
+    }
+
+    @GetMapping("/my")
+    public List<com.kovanlabs.project.dto.BranchResponseDTO> getMyBusinessBranches(Authentication authentication) {
+        if (authentication == null || authentication.getName() == null) {
+            throw new RuntimeException("Not authenticated");
+        }
+        User user = userRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        if (user.getBusiness() == null) {
+            throw new RuntimeException("Business not found for user");
+        }
+        return branchService.getAllBranches(user.getBusiness().getId());
     }
 
     @GetMapping("/{id}")

@@ -13,6 +13,7 @@ public class BranchInventoryDTO {
     private Double quantity;
     private Double threshold;
     private String unit;
+    private Double pricePerUnit;
     private Long branchId;
     private String batchNumber;
     @JsonFormat(pattern = "yyyy-MM-dd")

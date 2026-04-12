@@ -32,6 +32,16 @@ public class ProductController {
     }
 
     @CrossOrigin("http://localhost:5173")
+    @GetMapping("/available")
+    public List<Product> getAvailableForBranch(
+            @RequestParam Long branchId,
+            Authentication authentication) {
+        User user = userService.findByEmail(authentication.getName());
+        if (user == null || user.getBusiness() == null) throw new RuntimeException("Invalid user context");
+        return service.getProductsAvailableForBranch(user.getBusiness().getId(), branchId);
+    }
+
+    @CrossOrigin("http://localhost:5173")
     @GetMapping("/{id}")
     public Product getProductById(@PathVariable Long id) {
         return service.getProductById(id);

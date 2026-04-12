@@ -34,6 +34,7 @@ public class WarehouseInventoryService {
         this.auditService = auditService;
     }
 
+    // ✅ ADD / UPDATE INVENTORY
     public WarehouseInventory addOrUpdateIngredient(WarehouseInventoryDTO dto) {
         logger.info("Processing ingredient: {} (ID: {}) for warehouse ID: {}",
                 dto.getIngredientName(), dto.getId(), dto.getWarehouseId());
@@ -43,11 +44,12 @@ public class WarehouseInventoryService {
 
         WarehouseInventory inventory = null;
 
+        // 1. Try finding by ID if provided
         if (dto.getId() != null) {
             inventory = inventoryRepository.findById(dto.getId()).orElse(null);
         }
 
-
+        // 2. If not found by ID (or ID not provided), try finding by Name + Warehouse
         if (inventory == null && dto.getIngredientName() != null) {
             String name = dto.getIngredientName().trim().toLowerCase();
             inventory = inventoryRepository.findByIngredientNameIgnoreCaseAndWarehouseId(
@@ -55,20 +57,22 @@ public class WarehouseInventoryService {
         }
 
         if (inventory != null) {
-
+            // ✅ EXISTING RECORD FOUND
             logger.info("Existing ingredient found: {} (ID: {}). Updating...",
                     inventory.getIngredientName(), inventory.getId());
 
             if (dto.getId() != null) {
-
+                // If ID was provided, it's an explicit edit (e.g. from table row) -> Set absolute quantity
                 inventory.setQuantity(dto.getQuantity());
             } else {
-
+                // If found only by name (duplicate entry from form) -> Increment quantity
                 inventory.setQuantity(inventory.getQuantity() + dto.getQuantity());
             }
 
+            // Sync other fields
             if (dto.getThreshold() != null) inventory.setThreshold(dto.getThreshold());
             if (dto.getUnit() != null) inventory.setUnit(dto.getUnit());
+            if (dto.getPricePerUnit() != null) inventory.setPricePerUnit(dto.getPricePerUnit());
             if (dto.getIngredientName() != null)
                 inventory.setIngredientName(dto.getIngredientName().trim().toLowerCase());
 
@@ -76,16 +80,18 @@ public class WarehouseInventoryService {
                     (dto.getId() != null ? "Updated " : "Merged stock for ") + dto.getIngredientName(),
                     inventory.getId());
         } else {
-
+            // ✅ NEW INGREDIENT
             logger.info("No existing ingredient found for name: {}. Creating new record.", dto.getIngredientName());
             inventory = new WarehouseInventory();
             inventory.setIngredientName(dto.getIngredientName().trim().toLowerCase());
             inventory.setQuantity(dto.getQuantity());
+            inventory.setPricePerUnit(dto.getPricePerUnit());
             inventory.setThreshold(dto.getThreshold());
             inventory.setUnit(dto.getUnit());
             inventory.setWarehouse(warehouse);
         }
 
+        // Common batch info updates
         inventory.setBatchNumber(dto.getBatchNumber());
         inventory.setExpiryDate(dto.getExpiryDate());
         inventory.setStatus(dto.getStatus());
@@ -93,6 +99,7 @@ public class WarehouseInventoryService {
         return inventoryRepository.save(inventory);
     }
 
+    // ✅ GET ALL INVENTORY
     public List<WarehouseInventory> getAllIngredients() {
         return inventoryRepository.findAll();
     }
@@ -108,6 +115,7 @@ public class WarehouseInventoryService {
         return inventoryRepository.findByWarehouseId(warehouseId);
     }
 
+    // ✅ GET SINGLE INGREDIENT (WITH BATCH)
     public WarehouseInventory getIngredient(Long warehouseId, String name, String batch) {
 
         logger.info("Fetching ingredient: {} batch: {} for warehouse ID: {}",
@@ -122,6 +130,7 @@ public class WarehouseInventoryService {
                 .orElseThrow(() -> new RuntimeException("Ingredient not found"));
     }
 
+    // ✅ DELETE INGREDIENT BY ID
     public void deleteIngredient(Long id) {
         logger.info("Deleting ingredient with ID: {}", id);
         WarehouseInventory inventory = inventoryRepository.findById(id)
@@ -130,6 +139,7 @@ public class WarehouseInventoryService {
         logger.info("Ingredient with ID: {} deleted successfully", id);
     }
 
+    // ✅ DELETE INGREDIENT (OLD METHOD)
     public String deleteIngredient(Long warehouseId, String name, String batch) {
 
         WarehouseInventory inventory = getIngredient(warehouseId, name, batch);

@@ -24,6 +24,7 @@ public class BranchInventory {
     private Double quantity;
     private Double threshold;
     private String unit;
+    private Double pricePerUnit;
     private String batchNumber;
     private LocalDate expiryDate;
     private String status;

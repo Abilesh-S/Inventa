@@ -25,7 +25,12 @@ public class StockRequestController {
     }
 
     @GetMapping("/pending")
-    public List<StockRequest> getPending(Authentication authentication) {
+    public List<StockRequest> getPending(
+            @RequestParam(required = false) Long branchId,
+            Authentication authentication) {
+        if (branchId != null) {
+            return stockRequestService.getPendingForOwnerByBranch(authentication.getName(), branchId);
+        }
         return stockRequestService.getPendingForOwner(authentication.getName());
     }
 

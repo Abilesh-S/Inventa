@@ -5,6 +5,7 @@ import com.kovanlabs.project.dto.LoginDTO;
 import com.kovanlabs.project.dto.UserDTO;
 import com.kovanlabs.project.model.Role;
 import com.kovanlabs.project.model.User;
+import com.kovanlabs.project.repository.UserRepository;
 import com.kovanlabs.project.security.JwtService;
 import com.kovanlabs.project.service.UserService;
 import org.springframework.http.HttpStatus;
@@ -13,6 +14,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @CrossOrigin("http://localhost:5173")
@@ -21,10 +23,13 @@ public class UserController {
 
     private final UserService userService;
     private final JwtService jwtService;
+    private final com.kovanlabs.project.repository.UserRepository userRepository;
 
-    public UserController(UserService userService, JwtService jwtService) {
+    public UserController(UserService userService, JwtService jwtService,
+                          com.kovanlabs.project.repository.UserRepository userRepository) {
         this.userService = userService;
         this.jwtService = jwtService;
+        this.userRepository = userRepository;
     }
 
     @GetMapping
@@ -66,11 +71,38 @@ public class UserController {
 
     @PostMapping("/create-staff")
     public User createStaff(@RequestBody UserDTO dto, Authentication authentication) {
+        User caller = userService.findByEmail(authentication.getName());
+        // If a manager is creating staff, auto-assign to their branch
+        if (caller != null && caller.getRole() == Role.MANAGER && caller.getBranch() != null) {
+            if (dto.getBranchId() == null) {
+                dto.setBranchId(caller.getBranch().getId());
+            }
+            if (dto.getBusinessId() == null && caller.getBusiness() != null) {
+                dto.setBusinessId(caller.getBusiness().getId());
+            }
+        }
         return userService.registerBranchUserByOwner(dto, Role.STAFF, authentication.getName());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<String> handleValidationError(IllegalArgumentException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
+    }
+
+    @GetMapping("/branch/{branchId}")
+    public ResponseEntity<?> getUsersByBranch(@PathVariable Long branchId, Authentication authentication) {
+        User caller = userService.findByEmail(authentication.getName());
+        if (caller == null) return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied");
+
+        if (caller.getRole() == Role.MANAGER) {
+            if (caller.getBranch() == null || !caller.getBranch().getId().equals(branchId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied");
+            }
+        } else if (caller.getRole() != Role.OWNER) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied");
+        }
+        List<User> managers = userRepository.findByBranchIdAndRole(branchId, Role.MANAGER);
+        List<User> staff    = userRepository.findByBranchIdAndRole(branchId, Role.STAFF);
+        return ResponseEntity.ok(Map.of("managers", managers, "staff", staff));
     }
 }

@@ -2,13 +2,11 @@ package com.kovanlabs.project.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.kovanlabs.project.model.Warehouse;
-import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 
-@Entity
 @Data
 @NoArgsConstructor
 
@@ -17,6 +15,7 @@ public class WarehouseInventoryDTO {
     private Long id;
     private String ingredientName;
     private Double quantity;
+    private Double pricePerUnit;
     private String unit;
     private Long warehouseId;
 

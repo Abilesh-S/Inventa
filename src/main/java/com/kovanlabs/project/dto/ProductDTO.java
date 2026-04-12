@@ -8,13 +8,15 @@ import lombok.AllArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProductDTO {
-    private long id;
+
+    private Long id;
     private String name;
     private Double price;
     private String category;
     private String description;
     private String instructions;
     private String imageUrl;
+    private Long branchId;
     private java.util.List<RecipeDTO> recipes;
 
 }

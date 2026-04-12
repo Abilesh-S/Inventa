@@ -22,7 +22,10 @@ public class DashboardController {
     }
 
     @GetMapping("/stats")
-    public Object getStats(Authentication authentication) {
+    public Object getStats(
+            @RequestParam(required = false) Long branchId,
+            @RequestParam(required = false, defaultValue = "daily") String period,
+            Authentication authentication) {
         try {
             if (authentication == null || authentication.getName() == null) {
                 return Map.of("error", "Not Authenticated");
@@ -30,7 +33,7 @@ public class DashboardController {
             User user = userRepository.findByEmail(authentication.getName())
                     .orElseThrow(() -> new RuntimeException("User not found: " + authentication.getName()));
 
-            return dashboardService.getStats(user);
+            return dashboardService.getStats(user, branchId, period);
         } catch (Exception e) {
             e.printStackTrace();
             Map<String, Object> errorMap = new HashMap<>();

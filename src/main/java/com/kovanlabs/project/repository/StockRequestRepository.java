@@ -9,6 +9,7 @@ import java.util.List;
 public interface StockRequestRepository extends JpaRepository<StockRequest, Long> {
     List<StockRequest> findByBusinessIdAndStatusOrderByIdDesc(Long businessId, StockRequestStatus status);
     List<StockRequest> findByBranchIdOrderByIdDesc(Long branchId);
+    List<StockRequest> findByBranchIdAndStatusOrderByIdDesc(Long branchId, StockRequestStatus status);
 
     boolean existsByBranchIdAndIngredientNameIgnoreCaseAndStatus(
             Long branchId,

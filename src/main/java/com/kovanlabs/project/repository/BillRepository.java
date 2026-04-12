@@ -19,4 +19,7 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
 
     // All bills whose createdAt is in the given range (inclusive start, exclusive end)
     List<Bill> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
+    @Query("SELECT b FROM Bill b JOIN FETCH b.order o WHERE o.branchId = :branchId AND b.createdAt BETWEEN :start AND :end")
+    List<Bill> findByBranchIdAndCreatedAtBetween(@Param("branchId") Long branchId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 }

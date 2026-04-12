@@ -14,16 +14,38 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final RecipeRepository recipeRepository;
     private final BusinessRepository businessRepository;
+    private final BranchInventoryRepository branchInventoryRepository;
+    private final BranchRepository branchRepository;
 
     public ProductService(ProductRepository productRepository,
                           RecipeRepository recipeRepository,
-                          BusinessRepository businessRepository) {
+                          BusinessRepository businessRepository,
+                          BranchInventoryRepository branchInventoryRepository,
+                          BranchRepository branchRepository) {
         this.productRepository = productRepository;
         this.recipeRepository = recipeRepository;
         this.businessRepository = businessRepository;
+        this.branchInventoryRepository = branchInventoryRepository;
+        this.branchRepository = branchRepository;
     }
     public List<Product> getAllProducts(Long businessId) {
         return productRepository.findByBusinessId(businessId);
+    }
+
+    /**
+     * Returns products scoped to the given branch PLUS business-wide products (branch = null).
+     * Falls back to all business products if no branchId is provided.
+     */
+    public List<Product> getProductsAvailableForBranch(Long businessId, Long branchId) {
+        if (branchId == null) return productRepository.findByBusinessId(businessId);
+        // Branch-specific products for this branch
+        List<Product> branchProducts = productRepository.findByBranchIdAndBusinessId(branchId, businessId);
+        // Business-wide products (no branch assigned)
+        List<Product> businessWideProducts = productRepository.findByBranchIsNullAndBusinessId(businessId);
+        // Merge — branch-specific first, then business-wide
+        List<Product> merged = new java.util.ArrayList<>(branchProducts);
+        merged.addAll(businessWideProducts);
+        return merged;
     }
 
     public Product getProductById(Long id) {
@@ -45,15 +67,18 @@ public class ProductService {
 
         Product p = null;
 
-        if (dto.getId() > 0) {
+        // 1. Attempt lookup by ID
+        if (dto.getId() != null && dto.getId() > 0) {
             Product candidate = productRepository.findById(dto.getId()).orElse(null);
             if (candidate != null && candidate.getBusiness() != null && businessId.equals(candidate.getBusiness().getId())) {
                 p = candidate;
             }
         }
 
-        // 2. Attempt lookup by Name (Fallback for new entries or ID mismatches)
-        if (p == null) {
+        // 2. Name-based fallback — only when NOT creating a branch-specific product
+        //    (branch products can share names across branches, so name lookup would wrongly
+        //     match a product from a different branch)
+        if (p == null && dto.getBranchId() == null) {
             p = productRepository.findByNameIgnoreCaseAndBusinessId(dto.getName().trim(), businessId).orElse(null);
         }
 
@@ -73,6 +98,11 @@ public class ProductService {
         p.setDescription(dto.getDescription());
         p.setInstructions(dto.getInstructions());
         p.setImageUrl(dto.getImageUrl());
+
+        // Set branch if provided
+        if (dto.getBranchId() != null) {
+            branchRepository.findById(dto.getBranchId()).ifPresent(p::setBranch);
+        }
 
         // ✅ Handle Recipes (Synchronize using managed list + orphanRemoval)
         if (p.getRecipes() == null) {

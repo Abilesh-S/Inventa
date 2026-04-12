@@ -55,21 +55,27 @@ public class BranchInventoryService {
                 auditService.log("STOCK_UPDATED", "BranchInventory", "Edited " + name + " to " + dto.getQuantity(), inventory.getId());
             } else {
                 logger.info("Name-based Merge (Name: {}). Adding {} to existing {}", name, dto.getQuantity(), inventory.getQuantity());
-                inventory.setQuantity(inventory.getQuantity() + dto.getQuantity());
+                inventory.setQuantity(inventory.getQuantity() + dto.getQuantity()); // INCREMENT for duplicates
                 auditService.log("STOCK_UPDATED", "BranchInventory", "Merged " + name + " added " + dto.getQuantity(), inventory.getId());
             }
         } else {
             logger.info("Creating new ingredient record: {}", name);
             inventory.setQuantity(dto.getQuantity());
             inventory.setBranch(branch);
+            inventory.setPricePerUnit(dto.getPricePerUnit());
             inventory.setThreshold(dto.getThreshold());
             inventory.setUnit(dto.getUnit());
             inventory.setUnit(dto.getUnit());
         }
 
         inventory.setIngredientName(name);
+        if (dto.getPricePerUnit() != null) {
+            inventory.setPricePerUnit(dto.getPricePerUnit());
+        }
         inventory.setBatchNumber(dto.getBatchNumber());
         inventory.setExpiryDate(dto.getExpiryDate());
+        // IMPORTANT: Orders only deduct from rows with status="ACTIVE".
+        // If the frontend doesn't send status, default to ACTIVE so stock stays usable.
         inventory.setStatus(dto.getStatus() == null || dto.getStatus().isBlank() ? "ACTIVE" : dto.getStatus());
 
         boolean isNew = (inventory.getId() == null);
@@ -89,7 +95,7 @@ public class BranchInventoryService {
         return branchInventoryRepository.findByBranchId(branchId);
     }
 
-
+    /** Sum of ingredient quantities across every branch belonging to the business. */
     public double getTotalQuantityAcrossBranches(Long businessId) {
         return branchInventoryRepository.findByBranch_Business_Id(businessId).stream()
                 .mapToDouble(bi -> Objects.requireNonNullElse(bi.getQuantity(), 0.0))
