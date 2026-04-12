@@ -107,7 +107,7 @@ export default function BranchInventoryView() {
           onSearchChange={setSearchQuery}
         />
 
-        <div className="p-8 space-y-8 flex-grow">
+        <div className="pt-24 px-8 pb-8 space-y-8 flex-grow">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <Link
               to="/branches"

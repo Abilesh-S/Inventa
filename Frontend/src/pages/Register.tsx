@@ -3,8 +3,13 @@ import { Link, useNavigate } from "react-router-dom";
 
 const API_BASE = "http://localhost:8080/Inventa/api";
 
+type Step = "form" | "otp";
+
 export default function Register() {
   const navigate = useNavigate();
+  const [step, setStep] = useState<Step>("form");
+
+  // Form fields
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -12,19 +17,48 @@ export default function Register() {
   const [businessLocation, setBusinessLocation] = useState("");
   const [password, setPassword] = useState("");
 
+  // OTP
+  const [otp, setOtp] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: FormEvent) => {
+  // Step 1: send OTP
+  const handleSendOtp = async (e: FormEvent) => {
     e.preventDefault();
-    if (password.length < 8) {
-      setError("Password must be 8+ characters");
-      return;
-    }
+    if (password.length < 8) { setError("Password must be 8+ characters"); return; }
     setError(null);
     setLoading(true);
     try {
-      // 1) Create business first
+      const res = await fetch(`${API_BASE}/email/send-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) throw new Error(await res.text() || "Failed to send OTP");
+      setStep("otp");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 2: verify OTP then create account
+  const handleVerifyAndRegister = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      // Verify OTP
+      const verifyRes = await fetch(`${API_BASE}/email/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp }),
+      });
+      if (!verifyRes.ok) throw new Error(await verifyRes.text() || "Invalid OTP");
+
+      // Create business
       const businessRes = await fetch(`${API_BASE}/business`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -34,35 +68,21 @@ export default function Register() {
           location: businessLocation || "Not specified",
         }),
       });
-
-      if (!businessRes.ok) {
-        const text = await businessRes.text();
-        throw new Error(text || "Failed to create business");
-      }
+      if (!businessRes.ok) throw new Error(await businessRes.text() || "Failed to create business");
       const business = await businessRes.json();
 
-      // 2) Register owner linked to created business
+      // Register owner
       const ownerRes = await fetch(`${API_BASE}/users/register-owner`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: fullName,
-          email,
-          phone,
-          password,
-          businessId: business.id,
-        }),
+        body: JSON.stringify({ name: fullName, email, phone, password, businessId: business.id }),
       });
+      if (!ownerRes.ok) throw new Error(await ownerRes.text() || "Registration failed");
 
-      if (!ownerRes.ok) {
-        const text = await ownerRes.text();
-        throw new Error(text || "Owner registration failed");
-      }
-
-      alert("Owner account created successfully. Please login.");
+      alert("Account created successfully! Please login.");
       navigate("/");
     } catch (err: any) {
-      setError(err.message || "Registration failed");
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -71,189 +91,127 @@ export default function Register() {
   return (
     <div className="bg-surface text-on-surface font-body min-h-screen flex flex-col w-full overflow-hidden">
       <main className="flex-grow flex flex-col md:flex-row min-h-screen">
-
+        {/* Left branding panel */}
         <section className="hidden md:flex md:w-5/12 bg-inverse-surface relative overflow-hidden p-12 flex-col justify-between">
           <div className="relative z-10">
             <div className="flex items-center gap-3 text-primary-fixed mb-12">
-              <span className="material-symbols-outlined text-4xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>inventory_2</span>
+              <span className="material-symbols-outlined text-4xl">inventory_2</span>
               <span className="text-3xl font-semibold tracking-tighter text-white">Ventorie</span>
             </div>
             <h1 className="text-5xl font-medium text-white tracking-tight leading-tight max-w-md">
               Inventory <span className="text-primary-fixed italic font-light">management</span> for modern enterprise.
             </h1>
-            <p className="text-on-surface-variant mt-6 text-lg max-w-sm">
-              Access real-time logistics data with an editorial-grade interface designed for velocity.
-            </p>
           </div>
-
-
-
           <div className="absolute top-0 right-0 w-full h-full opacity-20 pointer-events-none">
-            <img className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCBIDbPneuRpXxkJJNMueVbAnoP7UcGrjFuC_DmYOyCwSUdk8yom_uf-ztvvTktYdR5wL_M7A0M-NRsB9ioGwYY08wAgTQIIi5eMypTqOs1N76LKj6bHyo56XD8WGh2ahrNzbaEazbNkcdlssZboKk94z_MZhZZx0mu9HyaA-08ZZjk2QTjJ4iUeTT4QC9J8JR3gnPbBhWpTXyuif31TdEvrYhhjVYxoYnrGN1rJnaJCOtUZZwMfr9KoA3OyzsvXoc83QHCQ66xFw8" alt="Warehouse Background" />
+            <img className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCBIDbPneuRpXxkJJNMueVbAnoP7UcGrjFuC_DmYOyCwSUdk8yom_uf-ztvvTktYdR5wL_M7A0M-NRsB9ioGwYY08wAgTQIIi5eMypTqOs1N76LKj6bHyo56XD8WGh2ahrNzbaEazbNkcdlssZboKk94z_MZhZZx0mu9HyaA-08ZZjk2QTjJ4iUeTT4QC9J8JR3gnPbBhWpTXyuif31TdEvrYhhjVYxoYnrGN1rJnaJCOtUZZwMfr9KoA3OyzsvXoc83QHCQ66xFw8" alt="" />
           </div>
         </section>
 
-        {/* Right Section form */}
+        {/* Right form panel */}
         <section className="flex-grow w-full md:w-7/12 overflow-y-auto bg-surface p-6 md:p-12 lg:p-24 flex flex-col justify-center items-center">
           <div className="max-w-md w-full my-auto">
-            <header className="mb-10">
-              <h2 className="text-3xl font-medium tracking-tight text-on-surface mb-2">Create Account</h2>
-              <p className="text-on-surface-variant">Join the next generation of logistics intelligence.</p>
-            </header>
 
-            <div className="space-y-6">
-              {/* Social Logins */}
-              <div className="grid grid-cols-2 gap-4">
-                <button type="button" className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-surface-container-lowest text-on-surface font-medium border border-outline-variant/10 hover:bg-surface-container-low transition-all duration-300">
-                  <img alt="Google" className="w-5 h-5" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAdWpBbojMcfTAOlZ0s1akkxkpnJSUkXJAO3YrA6dOCgveOkVpUVRKcaZX7R5oC9jaxDvBQ_VcWhDf5oyPVCS7DvJD20PPzCvYZkDAXxYHXL4P-JKv0UlNnHsP95cBtvotXNN68DDyZTMuHdmFTWLAFMzqOeUUIFMhZ5lNVsMmHjcEdRo8E1zNehm3FYYLwqLFgiqFwh4T1i5M8BVmuQVMOXfut6ulFytVx8O4DjXkSK614TKchCON0u_dNu_S0YVUPQ60Q8MVXlOY" />
-                  <span>Google</span>
-                </button>
-                <button type="button" className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-surface-container-lowest text-on-surface font-medium border border-outline-variant/10 hover:bg-surface-container-low transition-all duration-300">
-                  <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>ios</span>
-                  <span>Apple</span>
-                </button>
-              </div>
+            {step === "form" ? (
+              <>
+                <header className="mb-10">
+                  <h2 className="text-3xl font-medium tracking-tight text-on-surface mb-2">Create Account</h2>
+                  <p className="text-on-surface-variant">Join the next generation of logistics intelligence.</p>
+                </header>
 
-              <div className="flex items-center gap-4 text-outline-variant text-xs uppercase tracking-widest py-2">
-                <div className="flex-grow h-px bg-outline-variant/20"></div>
-                <span>or register with email</span>
-                <div className="flex-grow h-px bg-outline-variant/20"></div>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="space-y-1">
-                  <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider px-1" htmlFor="full_name">Full Name</label>
-                  <input
-                    id="full_name"
-                    name="full_name"
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    required
-                    className="w-full px-4 py-3 bg-surface-container-low border-b border-transparent focus:border-primary focus:ring-0 transition-colors rounded-t-lg text-on-surface placeholder:text-outline/50"
-                    placeholder="Alex Sterling"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider px-1" htmlFor="email">Email Address</label>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="w-full px-4 py-3 bg-surface-container-low border-b border-transparent focus:border-primary focus:ring-0 transition-colors rounded-t-lg text-on-surface placeholder:text-outline/50"
-                    placeholder="alex@enterprise.com"
-                  />
-                  {email === "" && (
-                    <p className="text-error text-[11px] mt-1 flex items-center gap-1 opacity-60">
-                      <span className="material-symbols-outlined text-xs" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>error_outline</span>
-                      Email is required
-                    </p>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <form onSubmit={handleSendOtp} className="space-y-5">
                   <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider px-1" htmlFor="phone">Phone Number</label>
-                    <input
-                      id="phone"
-                      name="phone"
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="w-full px-4 py-3 bg-surface-container-low border-b border-transparent focus:border-primary focus:ring-0 transition-colors rounded-t-lg text-on-surface placeholder:text-outline/50"
-                      placeholder="+1 (555) 000-0000"
-                    />
+                    <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider px-1">Full Name</label>
+                    <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} required
+                      className="w-full px-4 py-3 bg-surface-container-low rounded-t-lg text-on-surface placeholder:text-outline/50 border-b border-transparent focus:border-primary focus:ring-0 outline-none transition-colors"
+                      placeholder="Alex Sterling" />
                   </div>
                   <div className="space-y-1">
-                    <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider px-1" htmlFor="business_name">Business Name</label>
-                    <input
-                      id="business_name"
-                      name="business_name"
-                      type="text"
-                      value={businessName}
-                      onChange={(e) => setBusinessName(e.target.value)}
-                      required
-                      className="w-full px-4 py-3 bg-surface-container-low border-b border-transparent focus:border-primary focus:ring-0 transition-colors rounded-t-lg text-on-surface placeholder:text-outline/50"
-                      placeholder="e.g. KFC Branch Group"
-                    />
+                    <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider px-1">Email Address</label>
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
+                      className="w-full px-4 py-3 bg-surface-container-low rounded-t-lg text-on-surface placeholder:text-outline/50 border-b border-transparent focus:border-primary focus:ring-0 outline-none transition-colors"
+                      placeholder="alex@enterprise.com" />
                   </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider px-1" htmlFor="business_location">Business Location</label>
-                  <input
-                    id="business_location"
-                    name="business_location"
-                    type="text"
-                    value={businessLocation}
-                    onChange={(e) => setBusinessLocation(e.target.value)}
-                    className="w-full px-4 py-3 bg-surface-container-low border-b border-transparent focus:border-primary focus:ring-0 transition-colors rounded-t-lg text-on-surface placeholder:text-outline/50"
-                    placeholder="e.g. Chennai"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider px-1" htmlFor="password">Password</label>
-                  <div className="relative">
-                    <input
-                      id="password"
-                      name="password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      className="w-full px-4 py-3 bg-surface-container-low border-b border-transparent focus:border-primary focus:ring-0 transition-colors rounded-t-lg text-on-surface placeholder:text-outline/50"
-                      placeholder="••••••••••••"
-                    />
-                    <button className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary transition-colors" type="button">
-                      <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>visibility</span>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider px-1">Phone</label>
+                      <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
+                        className="w-full px-4 py-3 bg-surface-container-low rounded-t-lg text-on-surface placeholder:text-outline/50 border-b border-transparent focus:border-primary focus:ring-0 outline-none transition-colors"
+                        placeholder="+91 9876543210" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider px-1">Business Name</label>
+                      <input type="text" value={businessName} onChange={e => setBusinessName(e.target.value)} required
+                        className="w-full px-4 py-3 bg-surface-container-low rounded-t-lg text-on-surface placeholder:text-outline/50 border-b border-transparent focus:border-primary focus:ring-0 outline-none transition-colors"
+                        placeholder="e.g. KFC Group" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider px-1">Business Location</label>
+                    <input type="text" value={businessLocation} onChange={e => setBusinessLocation(e.target.value)}
+                      className="w-full px-4 py-3 bg-surface-container-low rounded-t-lg text-on-surface placeholder:text-outline/50 border-b border-transparent focus:border-primary focus:ring-0 outline-none transition-colors"
+                      placeholder="e.g. Chennai" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider px-1">Password</label>
+                    <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
+                      className="w-full px-4 py-3 bg-surface-container-low rounded-t-lg text-on-surface placeholder:text-outline/50 border-b border-transparent focus:border-primary focus:ring-0 outline-none transition-colors"
+                      placeholder="Min 8 chars, upper, lower, number, special" />
+                  </div>
+                  {error && <p className="text-error text-xs">{error}</p>}
+                  <div className="pt-4">
+                    <button type="submit" disabled={loading}
+                      className="w-full neon-gradient py-4 rounded-xl text-on-primary-fixed font-bold text-lg hover:shadow-lg transition-all active:scale-[0.98]">
+                      {loading ? "Sending OTP..." : "Send Verification OTP"}
                     </button>
                   </div>
-                  {error && <p className="text-error text-xs mt-1 flex items-center gap-1">
-                    <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>error_outline</span>
-                    {error}
-                  </p>}
-                </div>
+                </form>
+              </>
+            ) : (
+              <>
+                <header className="mb-10">
+                  <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-6">
+                    <span className="material-symbols-outlined text-3xl text-primary">mark_email_read</span>
+                  </div>
+                  <h2 className="text-3xl font-medium tracking-tight text-on-surface mb-2">Verify Your Email</h2>
+                  <p className="text-on-surface-variant">
+                    We sent a 6-digit OTP to <strong>{email}</strong>. Enter it below to complete registration.
+                  </p>
+                </header>
 
-                <div className="pt-4">
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full neon-gradient py-4 rounded-xl text-on-primary-fixed font-bold text-lg hover:shadow-lg hover:shadow-primary-container/40 transition-all duration-300 transform active:scale-[0.98]"
-                  >
-                    {loading ? "Creating..." : "Create Account"}
+                <form onSubmit={handleVerifyAndRegister} className="space-y-6">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider px-1">Enter OTP</label>
+                    <input
+                      type="text"
+                      value={otp}
+                      onChange={e => setOtp(e.target.value)}
+                      required
+                      maxLength={6}
+                      className="w-full px-4 py-4 bg-surface-container-low rounded-xl text-on-surface text-center text-2xl font-black tracking-[0.5em] border-2 border-transparent focus:border-primary focus:ring-0 outline-none transition-colors"
+                      placeholder="000000"
+                    />
+                  </div>
+                  {error && <p className="text-error text-xs">{error}</p>}
+                  <button type="submit" disabled={loading}
+                    className="w-full neon-gradient py-4 rounded-xl text-on-primary-fixed font-bold text-lg hover:shadow-lg transition-all active:scale-[0.98]">
+                    {loading ? "Creating Account..." : "Verify & Create Account"}
                   </button>
-                </div>
-              </form>
+                  <button type="button" onClick={() => { setStep("form"); setError(null); }}
+                    className="w-full py-3 text-sm text-on-surface-variant hover:text-on-surface transition-colors">
+                    ← Back to edit details
+                  </button>
+                </form>
+              </>
+            )}
 
-              <footer className="text-center pt-8">
-                <p className="text-on-surface-variant">
-                  Already have an account? <Link className="text-primary font-semibold hover:underline ml-1" to="/">Login here</Link>
-                </p>
-              </footer>
-            </div>
+            <footer className="text-center pt-8">
+              <p className="text-on-surface-variant">
+                Already have an account? <Link className="text-primary font-semibold hover:underline ml-1" to="/">Login here</Link>
+              </p>
+            </footer>
           </div>
-
-          {/* Mobile footer, visible on small screens when scrolling down */}
-          <footer className="mt-8 md:hidden text-center text-xs text-neutral-500 pb-4">
-            © 2024 Ventorie. Kinetic Inventory Management.
-          </footer>
         </section>
       </main>
-
-      {/* Footer Identity (Desktop absolute or flex) */}
-      <footer className="hidden md:flex bg-transparent max-w-7xl w-full px-8 py-8 md:absolute md:bottom-0 md:right-0 xl:right-12 xl:max-w-4xl justify-between items-center z-50 pointer-events-none">
-        <p className="font-['Inter'] text-sm tracking-normal text-neutral-500 pointer-events-auto">© 2024 Ventorie. Kinetic Inventory Management.</p>
-        <nav className="flex gap-8 mt-4 md:mt-0 pointer-events-auto">
-          <a className="font-['Inter'] text-sm text-neutral-500 hover:text-[#496400] transition-colors" href="#">Privacy</a>
-          <a className="font-['Inter'] text-sm text-neutral-500 hover:text-[#496400] transition-colors" href="#">Terms</a>
-          <a className="font-['Inter'] text-sm text-neutral-500 hover:text-[#496400] transition-colors" href="#">Support</a>
-        </nav>
-      </footer>
     </div>
   );
 }

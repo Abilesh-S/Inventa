@@ -9,6 +9,9 @@ import BranchManagement from "./pages/BranchManagement";
 import BranchInventoryView from "./pages/BranchInventoryView";
 import ManagerDashboard from "./pages/ManagerDashboard";
 import StaffDashboard from "./pages/StaffDashboard";
+import UsersManagement from "./pages/UsersManagement";
+import OwnerBilling from "./pages/OwnerBilling";
+import Profile from "./pages/Profile";
 
 function OwnerLayout() {
   return (
@@ -57,6 +60,9 @@ export default function App() {
       <Route path="/branch-inventory/:branchId" element={<BranchInventoryView />} />
       <Route path="/manager-dashboard" element={<ManagerDashboard />} />
       <Route path="/staff-dashboard" element={<StaffDashboard />} />
+      <Route path="/users" element={<UsersManagement />} />
+      <Route path="/owner-billing" element={<OwnerBilling />} />
+      <Route path="/profile" element={<Profile />} />
     </Routes>
   );
 }

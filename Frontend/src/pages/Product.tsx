@@ -31,6 +31,12 @@ interface Ingredient {
     unit: string;
 }
 
+interface Branch {
+    id: number;
+    name: string;
+    location: string;
+}
+
 export default function Product() {
     const navigate = useNavigate();
     const [products, setProducts] = useState<Product[]>([]);
@@ -39,10 +45,15 @@ export default function Product() {
     const [showSidebar, setShowSidebar] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
 
+    // Branch state
+    const [branches, setBranches] = useState<Branch[]>([]);
+    const [selectedBranchId, setSelectedBranchId] = useState<number | "">("");
+
     // Form State
     const [formName, setFormName] = useState("");
     const [formDesc, setFormDesc] = useState("");
     const [formCategory, setFormCategory] = useState("Main Course");
+    const [customCategoryInput, setCustomCategoryInput] = useState(false);
     const [formPrice, setFormPrice] = useState(0);
     const [formImageUrl, setFormImageUrl] = useState("");
     const [formInstructions, setFormInstructions] = useState("");
@@ -57,9 +68,28 @@ export default function Product() {
             navigate("/");
             return;
         }
-        fetchProducts();
+        fetchBranches();
         fetchAvailableIngredients();
     }, []);
+
+    useEffect(() => {
+        fetchProducts();
+    }, [selectedBranchId]);
+
+    const fetchBranches = async () => {
+        try {
+            const user = JSON.parse(localStorage.getItem("user") || "{}");
+            const res = await fetch(`${API_BASE}/branches/my`, {
+                headers: { 'Authorization': getAuthHeader(user) }
+            });
+            if (res.ok) {
+                const data: Branch[] = await res.json();
+                setBranches(data);
+            }
+        } catch (err) {
+            console.error("Failed to fetch branches", err);
+        }
+    };
 
     const fetchAvailableIngredients = async () => {
         try {
@@ -93,7 +123,10 @@ export default function Product() {
     const fetchProducts = async () => {
         try {
             const user = JSON.parse(localStorage.getItem("user") || "{}");
-            const res = await fetch(`${API_BASE}/products`, {
+            const url = selectedBranchId !== ""
+                ? `${API_BASE}/products/available?branchId=${selectedBranchId}`
+                : `${API_BASE}/products`;
+            const res = await fetch(url, {
                 headers: { 'Authorization': getAuthHeader(user) }
             });
             if (res.ok) {
@@ -125,6 +158,7 @@ export default function Product() {
         setFormName("");
         setFormDesc("");
         setFormCategory("Main Course");
+        setCustomCategoryInput(false);
         setFormPrice(0);
         setFormImageUrl("");
         setFormInstructions("");
@@ -136,11 +170,11 @@ export default function Product() {
         if (!name) return;
         const matchingAvailable = availableIngredients.find(i => i.ingredientName.toLowerCase() === name.toLowerCase());
         const existing = formIngredients.find(i => i.ingredientName.toLowerCase() === name.toLowerCase());
-        
+
         if (!existing) {
-            setFormIngredients([...formIngredients, { 
-                ingredientName: name, 
-                quantity: 1, 
+            setFormIngredients([...formIngredients, {
+                ingredientName: name,
+                quantity: 1,
                 unit: matchingAvailable?.unit || "kg",
                 ingredientId: matchingAvailable?.id
             }]);
@@ -170,18 +204,19 @@ export default function Product() {
                 price: formPrice,
                 instructions: formInstructions,
                 imageUrl: formImageUrl,
-                recipes: formIngredients 
+                branchId: selectedBranchId !== "" ? selectedBranchId : null,
+                recipes: formIngredients
             };
-            
+
             const res = await fetch(`${API_BASE}/products`, {
                 method: 'POST',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': getAuthHeader(user) 
+                    'Authorization': getAuthHeader(user)
                 },
                 body: JSON.stringify(payload)
             });
-            
+
             if (res.ok) {
                 setShowSidebar(false);
                 fetchProducts();
@@ -213,24 +248,34 @@ export default function Product() {
 
             {/* Main Content */}
             <main className="ml-64 flex-grow min-h-screen">
-                <Header 
-                    title="Product Catalog" 
-                    subtitle="Inventory Matrix" 
+                <Header
+                    title="Product Catalog"
+                    subtitle="Inventory Matrix"
                     searchPlaceholder="Search products..."
                     icon="inventory_2"
                     searchValue={searchQuery}
                     onSearchChange={setSearchQuery}
                 >
-                    <button 
+                    <button
                         onClick={handleAddNew}
                         className="bg-[#c5fe3c] text-[#364b00] px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:scale-105 transition-all active:scale-95 shadow-sm"
                     >
                         <span className="material-symbols-outlined text-base">add</span>
                         New Product
                     </button>
+                    {branches.length > 0 && (
+                        <select
+                            value={selectedBranchId}
+                            onChange={e => setSelectedBranchId(e.target.value === "" ? "" : Number(e.target.value))}
+                            className="bg-[#eff1f3] border-none rounded-xl px-4 py-2.5 text-[10px] font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-[#c5fe3c] appearance-none cursor-pointer"
+                        >
+                            <option value="">All Branches</option>
+                            {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                        </select>
+                    )}
                 </Header>
 
-                <div className="px-8 py-6 space-y-8">
+                <div className="pt-24 px-8 pb-8 space-y-8">
                     {/* Stats Grid - 4 Column Layout for vertical alignment */}
                     <section className="grid grid-cols-1 md:grid-cols-4 gap-8">
                         <div className="col-span-2 bg-white p-6 rounded-xl shadow-[0px_24px_48px_rgba(44,47,49,0.06)] flex flex-col justify-between overflow-hidden relative group">
@@ -289,9 +334,9 @@ export default function Product() {
                                                 <td className="px-6 py-5">
                                                     <div className="flex items-center gap-3">
                                                         {product.imageUrl ? (
-                                                            <img 
-                                                                src={product.imageUrl} 
-                                                                className="w-12 h-12 rounded-xl object-cover shadow-sm ring-1 ring-black/5" 
+                                                            <img
+                                                                src={product.imageUrl}
+                                                                className="w-12 h-12 rounded-xl object-cover shadow-sm ring-1 ring-black/5"
                                                                 alt={product.name}
                                                             />
                                                         ) : (
@@ -324,8 +369,8 @@ export default function Product() {
                                                                 <span className="text-[10px] text-gray-400 italic">No recipe</span>
                                                             )}
                                                         </div>
-                                                        <button 
-                                                            onClick={() => setViewingRecipeProduct(product)} 
+                                                        <button
+                                                            onClick={() => setViewingRecipeProduct(product)}
                                                             className="text-[#496400] text-[10px] font-bold flex items-center gap-1 hover:opacity-80 transition-opacity"
                                                         >
                                                             <span className="material-symbols-outlined text-xs">visibility</span> VIEW RECIPE
@@ -337,14 +382,14 @@ export default function Product() {
                                                 </td>
                                                 <td className="px-6 py-5 text-right">
                                                     <div className="flex items-center justify-end gap-2">
-                                                        <button 
-                                                            onClick={() => handleEditProduct(product)} 
+                                                        <button
+                                                            onClick={() => handleEditProduct(product)}
                                                             className="material-symbols-outlined text-[#595c5e] opacity-0 group-hover:opacity-100 transition-opacity hover:text-[#496400]"
                                                         >
                                                             edit
                                                         </button>
-                                                        <button 
-                                                            onClick={() => handleDeleteProduct(product.id)} 
+                                                        <button
+                                                            onClick={() => handleDeleteProduct(product.id)}
                                                             className="material-symbols-outlined text-error/40 opacity-0 group-hover:opacity-100 transition-opacity hover:text-error"
                                                         >
                                                             delete
@@ -375,10 +420,10 @@ export default function Product() {
                                             )}
                                             <div className="flex-1">
                                                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#595c5e] mb-1 block">Product Image URL</label>
-                                                <input 
-                                                    className="w-full bg-[#eff1f3] border-none focus:ring-2 focus:ring-[#c5fe3c] text-sm py-2 px-3 rounded-lg outline-none" 
-                                                    type="text" 
-                                                    value={formImageUrl} 
+                                                <input
+                                                    className="w-full bg-[#eff1f3] border-none focus:ring-2 focus:ring-[#c5fe3c] text-sm py-2 px-3 rounded-lg outline-none"
+                                                    type="text"
+                                                    value={formImageUrl}
                                                     onChange={(e) => setFormImageUrl(e.target.value)}
                                                     placeholder="https://example.com/image.jpg"
                                                 />
@@ -386,83 +431,124 @@ export default function Product() {
                                         </div>
                                         <div>
                                             <label className="text-[10px] font-bold uppercase tracking-widest text-[#595c5e] mb-1 block">Product Name</label>
-                                            <input 
-                                                className="w-full bg-[#eff1f3] border-none focus:ring-2 focus:ring-[#c5fe3c] text-sm py-3 px-4 rounded-lg outline-none" 
-                                                type="text" 
-                                                value={formName} 
+                                            <input
+                                                className="w-full bg-[#eff1f3] border-none focus:ring-2 focus:ring-[#c5fe3c] text-sm py-3 px-4 rounded-lg outline-none"
+                                                type="text"
+                                                value={formName}
                                                 onChange={(e) => setFormName(e.target.value)}
                                             />
                                         </div>
                                         <div>
                                             <label className="text-[10px] font-bold uppercase tracking-widest text-[#595c5e] mb-1 block">Description</label>
-                                            <textarea 
-                                                className="w-full bg-[#eff1f3] border-none focus:ring-2 focus:ring-[#c5fe3c] text-sm py-3 px-4 rounded-lg outline-none min-h-[80px]" 
-                                                value={formDesc} 
+                                            <textarea
+                                                className="w-full bg-[#eff1f3] border-none focus:ring-2 focus:ring-[#c5fe3c] text-sm py-3 px-4 rounded-lg outline-none min-h-[80px]"
+                                                value={formDesc}
                                                 onChange={(e) => setFormDesc(e.target.value)}
                                                 placeholder="Enter product details..."
                                             />
                                         </div>
-                                        <div className="grid grid-cols-2 gap-4">
+                                        {customCategoryInput && (
                                             <div>
                                                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#595c5e] mb-1 block">Category</label>
-                                                <select 
-                                                    className="w-full bg-[#eff1f3] border-none focus:ring-2 focus:ring-[#c5fe3c] text-sm py-3 px-3 rounded-lg outline-none"
-                                                    value={formCategory}
-                                                    onChange={(e) => setFormCategory(e.target.value)}
-                                                >
-                                                    <option>Main Course</option>
-                                                    <option>Sides</option>
-                                                    <option>Beverages</option>
-                                                    <option>Desserts</option>
-                                                </select>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        autoFocus
+                                                        className="flex-1 bg-[#eff1f3] border-none focus:ring-2 focus:ring-[#c5fe3c] text-sm py-3 px-3 rounded-lg outline-none"
+                                                        placeholder="New category name..."
+                                                        value={formCategory}
+                                                        onChange={e => setFormCategory(e.target.value)}
+                                                    />
+                                                    <button type="button" onClick={() => setCustomCategoryInput(false)}
+                                                        className="px-3 py-2 bg-[#eff1f3] rounded-lg text-xs font-bold text-[#595c5e] hover:bg-[#e0e3e5]">✕</button>
+                                                </div>
                                             </div>
+                                        )}
+                                        <div className={`grid gap-4 ${customCategoryInput ? "grid-cols-1" : "grid-cols-2"}`}>
+                                            {!customCategoryInput && (
+                                                <div>
+                                                    <label className="text-[10px] font-bold uppercase tracking-widest text-[#595c5e] mb-1 block">Category</label>
+                                                    <select
+                                                        className="w-full bg-[#eff1f3] border-none focus:ring-2 focus:ring-[#c5fe3c] text-sm py-3 px-3 rounded-lg outline-none"
+                                                        value={formCategory}
+                                                        onChange={e => {
+                                                            if (e.target.value === "__new__") {
+                                                                setFormCategory("");
+                                                                setCustomCategoryInput(true);
+                                                            } else {
+                                                                setFormCategory(e.target.value);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {Array.from(new Set(products.map(p => p.category).filter(Boolean))).map(cat => (
+                                                            <option key={cat} value={cat}>{cat}</option>
+                                                        ))}
+                                                        {!products.some(p => p.category === formCategory) && formCategory && (
+                                                            <option value={formCategory}>{formCategory}</option>
+                                                        )}
+                                                        <option value="__new__">＋ Add new category...</option>
+                                                    </select>
+                                                </div>
+                                            )}
                                             <div>
                                                 <label className="text-[10px] font-bold uppercase tracking-widest text-[#595c5e] mb-1 block">Price</label>
-                                                <input 
-                                                    className="w-full bg-[#eff1f3] border-none focus:ring-2 focus:ring-[#c5fe3c] text-sm py-3 px-4 rounded-lg outline-none" 
-                                                    type="number" 
-                                                    value={formPrice} 
+                                                <input
+                                                    className="w-full bg-[#eff1f3] border-none focus:ring-2 focus:ring-[#c5fe3c] text-sm py-3 px-4 rounded-lg outline-none"
+                                                    type="number"
+                                                    value={formPrice}
                                                     onChange={(e) => setFormPrice(Number(e.target.value))}
                                                 />
                                             </div>
                                         </div>
                                         <div>
                                             <label className="text-[10px] font-bold uppercase tracking-widest text-[#595c5e] mb-1 block">Preparation Instructions</label>
-                                            <textarea 
-                                                className="w-full bg-[#eff1f3] border-none focus:ring-2 focus:ring-[#c5fe3c] text-sm py-3 px-4 rounded-lg outline-none min-h-[100px]" 
-                                                value={formInstructions} 
+                                            <textarea
+                                                className="w-full bg-[#eff1f3] border-none focus:ring-2 focus:ring-[#c5fe3c] text-sm py-3 px-4 rounded-lg outline-none min-h-[100px]"
+                                                value={formInstructions}
                                                 onChange={(e) => setFormInstructions(e.target.value)}
                                                 placeholder="Steps to prepare this product..."
                                             />
                                         </div>
+                                        {branches.length > 0 && (
+                                            <div>
+                                                <label className="text-[10px] font-bold uppercase tracking-widest text-[#595c5e] mb-1 block">Assign to Branch (Optional)</label>
+                                                <select
+                                                    className="w-full bg-[#eff1f3] border-none focus:ring-2 focus:ring-[#c5fe3c] text-sm py-3 px-3 rounded-lg outline-none"
+                                                    value={selectedBranchId}
+                                                    onChange={(e) => setSelectedBranchId(e.target.value === "" ? "" : Number(e.target.value))}
+                                                >
+                                                    <option value="">No specific branch</option>
+                                                    {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                                </select>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="pt-6 border-t border-[#eff1f3]">
                                         <div className="flex flex-col gap-3 mb-6">
                                             <label className="text-[10px] font-bold uppercase tracking-widest text-[#595c5e]">Recipe Composition</label>
                                             <div className="relative group">
-                                                <input 
-                                                    className="w-full bg-[#eff1f3] border-none focus:ring-2 focus:ring-[#c5fe3c] text-sm py-3 px-4 pr-10 rounded-lg outline-none" 
-                                                    type="text" 
-                                                    placeholder="Search or add ingredient..." 
+                                                <input
+                                                    className="w-full bg-[#eff1f3] border-none focus:ring-2 focus:ring-[#c5fe3c] text-sm py-3 px-4 pr-10 rounded-lg outline-none"
+                                                    type="text"
+                                                    placeholder="Search or add ingredient..."
                                                     value={ingredientSearch}
                                                     onChange={(e) => setIngredientSearch(e.target.value)}
                                                 />
-                                                <button 
+                                                <button
                                                     onClick={() => addIngredient(ingredientSearch)}
                                                     className="absolute right-2 top-2 bg-[#c5fe3c] text-[#364b00] p-1.5 rounded-md hover:opacity-90 transition-opacity"
                                                 >
                                                     <span className="material-symbols-outlined text-sm">add</span>
                                                 </button>
-                                                
+
                                                 {/* Suggestions Dropdown */}
                                                 {ingredientSearch && (
                                                     <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-[#eff1f3] rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto no-scrollbar">
                                                         {availableIngredients
                                                             .filter(ing => ing.ingredientName.toLowerCase().includes(ingredientSearch.toLowerCase()))
                                                             .map(ing => (
-                                                                <div 
-                                                                    key={ing.id} 
+                                                                <div
+                                                                    key={ing.id}
                                                                     onClick={() => addIngredient(ing.ingredientName)}
                                                                     className="px-4 py-3 text-sm hover:bg-[#c5fe3c]/10 cursor-pointer border-b border-[#eff1f3] last:border-0"
                                                                 >
@@ -489,7 +575,7 @@ export default function Product() {
                                                     <div key={idx} className="bg-white border border-[#eff1f3] rounded-2xl p-4 shadow-sm group/item hover:border-[#c5fe3c] transition-all">
                                                         <div className="flex items-center justify-between mb-3">
                                                             <span className="text-sm font-bold uppercase tracking-tight text-[#0c0f10]">{ing.ingredientName}</span>
-                                                            <button 
+                                                            <button
                                                                 onClick={() => removeIngredient(idx)}
                                                                 className="text-error/40 hover:text-error transition-colors"
                                                             >
@@ -498,17 +584,17 @@ export default function Product() {
                                                         </div>
                                                         <div className="grid grid-cols-2 gap-3">
                                                             <div className="relative">
-                                                                <input 
-                                                                    className="w-full bg-[#eff1f3] border-none text-xs p-2 rounded-lg outline-none" 
-                                                                    type="number" 
+                                                                <input
+                                                                    className="w-full bg-[#eff1f3] border-none text-xs p-2 rounded-lg outline-none"
+                                                                    type="number"
                                                                     value={ing.quantity}
                                                                     onChange={(e) => updateIngredient(idx, 'quantity', Number(e.target.value))}
                                                                 />
                                                                 <span className="absolute right-2 top-2 text-[8px] font-bold text-gray-400">QTY</span>
                                                             </div>
                                                             <div className="relative">
-                                                                <select 
-                                                                    className="w-full bg-[#eff1f3] border-none text-xs p-2 rounded-lg outline-none" 
+                                                                <select
+                                                                    className="w-full bg-[#eff1f3] border-none text-xs p-2 rounded-lg outline-none"
                                                                     value={ing.unit}
                                                                     onChange={(e) => updateIngredient(idx, 'unit', e.target.value)}
                                                                 >
@@ -526,7 +612,7 @@ export default function Product() {
                                         </div>
                                     </div>
 
-                                    <button 
+                                    <button
                                         onClick={handleSaveProduct}
                                         className="w-full bg-gradient-to-br from-[#496400] to-[#c5fe3c] text-[#deff95] py-4 rounded-xl font-bold tracking-tight text-sm shadow-lg hover:shadow-[#c5fe3c]/40 transition-all active:scale-95"
                                     >
@@ -550,7 +636,7 @@ export default function Product() {
                                     {viewingRecipeProduct.name.charAt(0)}
                                 </div>
                             )}
-                            <button 
+                            <button
                                 onClick={() => setViewingRecipeProduct(null)}
                                 className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white backdrop-blur-xl p-2 rounded-full transition-all"
                             >
@@ -560,7 +646,7 @@ export default function Product() {
                         <div className="p-8">
                             <h3 className="text-2xl font-black tracking-tighter mb-1 uppercase">{viewingRecipeProduct.name}</h3>
                             <p className="text-xs text-[#595c5e] mb-6 font-medium italic">#{viewingRecipeProduct.id} • {viewingRecipeProduct.category}</p>
-                            
+
                             <div className="space-y-6">
                                 <div>
                                     <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#496400] mb-3">Ingredient Composition</h4>
@@ -588,7 +674,7 @@ export default function Product() {
                                 )}
                             </div>
 
-                            <button 
+                            <button
                                 onClick={() => {
                                     handleEditProduct(viewingRecipeProduct);
                                     setViewingRecipeProduct(null);

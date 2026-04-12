@@ -139,7 +139,7 @@ export default function WarehouseOrders() {
           onSearchChange={setSearchQuery}
         />
 
-        <div className="p-8 space-y-8 flex-grow">
+        <div className="pt-24 px-8 pb-8 space-y-8 flex-grow">
           <div className="flex flex-col gap-4">
             <div>
               <h2 className="text-3xl font-black text-[#0c0f10] tracking-tighter mb-1 uppercase">Orders by branch</h2>

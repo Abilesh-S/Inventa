@@ -14,6 +14,7 @@ interface BranchInventory {
   id: number;
   ingredientName: string;
   quantity: number;
+  pricePerUnit?: number;
   unit: string;
   threshold: number;
   imageUrl?: string;
@@ -84,7 +85,7 @@ interface ManagerRecipe {
   unit: string;
 }
 
-// ── Stock-level helpers ───────────────────────────────────────────────────────
+// â”€â”€ Stock-level helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function stockLevel(qty: number, threshold: number): "critical" | "low" | "ok" {
   if (qty <= threshold * 0.5) return "critical";
   if (qty <= threshold) return "low";
@@ -112,6 +113,7 @@ export default function ManagerDashboard() {
   const [prodName, setProdName] = useState("");
   const [prodDesc, setProdDesc] = useState("");
   const [prodCategory, setProdCategory] = useState("Main Course");
+  const [customCategoryInput, setCustomCategoryInput] = useState(false);
   const [prodPrice, setProdPrice] = useState<number>(0);
   const [prodImageUrl, setProdImageUrl] = useState("");
   const [prodInstructions, setProdInstructions] = useState("");
@@ -137,12 +139,35 @@ export default function ManagerDashboard() {
   // Inventory search
   const [inventorySearch, setInventorySearch] = useState("");
 
+  // Billing state
+  const [billingCart, setBillingCart] = useState<{ id: number; name: string; price: number; qty: number }[]>([]);
+  const [billingCustomerName, setBillingCustomerName] = useState("");
+  const [billingCustomerPhone, setBillingCustomerPhone] = useState("");
+  const [billingHistory, setBillingHistory] = useState<any[]>([]);
+  const [billingTab, setBillingTab] = useState<"products" | "checkout" | "history">("products");
+  const [billingSearch, setBillingSearch] = useState("");
+  const [billingCategory, setBillingCategory] = useState("All");
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [billingError, setBillingError] = useState<string | null>(null);
+
+  // Staff state
+  const [staffList, setStaffList] = useState<{ id: number; name: string; email: string; phone: string; role: string }[]>([]);
+  const [managerList, setManagerList] = useState<{ id: number; name: string; email: string; phone: string; role: string }[]>([]);
+  const [showAddStaffModal, setShowAddStaffModal] = useState(false);
+  const [staffFormName, setStaffFormName] = useState("");
+  const [staffFormEmail, setStaffFormEmail] = useState("");
+  const [staffFormPhone, setStaffFormPhone] = useState("");
+  const [staffFormPassword, setStaffFormPassword] = useState("");
+  const [staffFormError, setStaffFormError] = useState<string | null>(null);
+  const [isAddingStaff, setIsAddingStaff] = useState(false);
+
   // Add New Ingredient modal
   const [showAddModal, setShowAddModal] = useState(false);
   const [newName, setNewName] = useState("");
   const [newQty, setNewQty] = useState<number>(0);
   const [newUnit, setNewUnit] = useState("kg");
   const [newThreshold, setNewThreshold] = useState<number>(10);
+  const [newPricePerUnit, setNewPricePerUnit] = useState<number>(0);
   const [newBatchNumber, setNewBatchNumber] = useState("");
   const [newExpiry, setNewExpiry] = useState<string>("");
   const [newImage, setNewImage] = useState<string | null>(null);
@@ -232,6 +257,7 @@ export default function ManagerDashboard() {
           quantity: newQty,
           unit: current?.unit || "units",
           threshold: current?.threshold || 10,
+          pricePerUnit: current?.pricePerUnit || 0,
           status: "ACTIVE",
         })
       });
@@ -296,6 +322,7 @@ export default function ManagerDashboard() {
     setNewQty(item.quantity);
     setNewUnit(item.unit);
     setNewThreshold(item.threshold);
+    setNewPricePerUnit(item.pricePerUnit || 0);
     setNewBatchNumber(item.batchNumber || "");
     setNewExpiry(item.expiryDate || "");
     setNewImage(item.imageUrl || null);
@@ -313,6 +340,7 @@ export default function ManagerDashboard() {
         quantity: newQty,
         unit: newUnit,
         threshold: newThreshold,
+        pricePerUnit: newPricePerUnit,
         batchNumber: newBatchNumber || undefined,
         expiryDate: newExpiry || undefined,
         status: editingItem?.status || "ACTIVE",
@@ -329,6 +357,7 @@ export default function ManagerDashboard() {
       setNewQty(0);
       setNewUnit("kg");
       setNewThreshold(10);
+      setNewPricePerUnit(0);
       setNewBatchNumber("");
       setNewExpiry("");
       setNewImage(null);
@@ -351,6 +380,7 @@ export default function ManagerDashboard() {
     setProdName("");
     setProdDesc("");
     setProdCategory("Main Course");
+    setCustomCategoryInput(false);
     setProdPrice(0);
     setProdImageUrl("");
     setProdInstructions("");
@@ -409,6 +439,7 @@ export default function ManagerDashboard() {
         price: prodPrice,
         instructions: prodInstructions,
         imageUrl: prodImageUrl,
+        branchId: branchId,
         recipes: prodIngredients,
       };
       const res = await fetch(`${API_BASE}/products`, {
@@ -433,10 +464,117 @@ export default function ManagerDashboard() {
 
   const handleLogout = () => { localStorage.removeItem("user"); navigate("/"); };
 
+  // â”€â”€ Billing helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const fetchBillingHistory = async () => {
+    if (!branchId) return;
+    try {
+      const res = await fetch(`${API_BASE}/bills/branch/${branchId}`, { headers: headers() });
+      if (res.ok) setBillingHistory(await res.json());
+    } catch (err) { console.error(err); }
+  };
+
+  const billingAddToCart = (p: BranchProduct) => {
+    setBillingCart(prev => {
+      const ex = prev.find(i => i.id === p.id);
+      if (ex) return prev.map(i => i.id === p.id ? { ...i, qty: i.qty + 1 } : i);
+      return [...prev, { id: p.id, name: p.name, price: p.price, qty: 1 }];
+    });
+  };
+
+  const billingUpdateQty = (id: number, delta: number) => {
+    setBillingCart(prev => prev.map(i => i.id === id ? { ...i, qty: i.qty + delta } : i).filter(i => i.qty > 0));
+  };
+
+  const billingCartTotal = billingCart.reduce((s, i) => s + i.price * i.qty, 0);
+
+  const handleFinalizeBilling = async () => {
+    if (billingCart.length === 0 || !branchId) return;
+    setIsFinalizing(true);
+    setBillingError(null);
+    try {
+      for (const item of billingCart) {
+        const res = await fetch(`${API_BASE}/orders/customer`, {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({
+            productId: item.id,
+            quantity: item.qty,
+            branchId,
+            customerName: billingCustomerName || "Walk-in",
+            customerPhone: billingCustomerPhone || "WALKIN",
+            taxPercent: 5.0,
+          }),
+        });
+        if (!res.ok) {
+          const msg = await res.text();
+          setBillingError(msg || "Order failed.");
+          return;
+        }
+      }
+      setBillingCart([]);
+      setBillingCustomerName("");
+      setBillingCustomerPhone("");
+      await fetchBillingHistory();
+      setBillingTab("history");
+    } catch (err: any) {
+      setBillingError(err.message);
+    } finally {
+      setIsFinalizing(false);
+    }
+  };
+
+  // â”€â”€ Staff helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const fetchStaff = async () => {
+    if (!branchId) return;
+    try {
+      const res = await fetch(`${API_BASE}/users/branch/${branchId}`, { headers: headers() });
+      if (res.ok) {
+        const data = await res.json();
+        setManagerList(data.managers || []);
+        setStaffList(data.staff || []);
+      }
+    } catch (err) { console.error(err); }
+  };
+
+  const handleAddStaff = async () => {
+    if (!staffFormName || !staffFormEmail || !staffFormPhone || !staffFormPassword) {
+      setStaffFormError("All fields are required.");
+      return;
+    }
+    setIsAddingStaff(true);
+    setStaffFormError(null);
+    try {
+      const res = await fetch(`${API_BASE}/users/create-staff`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          name: staffFormName,
+          email: staffFormEmail,
+          phone: staffFormPhone,
+          password: staffFormPassword,
+          branchId,
+        }),
+      });
+      if (res.ok) {
+        setShowAddStaffModal(false);
+        setStaffFormName(""); setStaffFormEmail(""); setStaffFormPhone(""); setStaffFormPassword("");
+        await fetchStaff();
+      } else {
+        const msg = await res.text();
+        setStaffFormError(msg || "Failed to create staff.");
+      }
+    } catch (err: any) {
+      setStaffFormError(err.message);
+    } finally {
+      setIsAddingStaff(false);
+    }
+  };
+
   const navItems = [
     { id: "dashboard", icon: "dashboard", label: "Dashboard" },
     { id: "inventory", icon: "inventory_2", label: "Branch Inventory" },
     { id: "update-stock", icon: "fastfood", label: "Products" },
+    { id: "billing", icon: "receipt_long", label: "Billing" },
     { id: "orders", icon: "shopping_cart", label: "Orders" },
     { id: "stock-requests", icon: "rebase_edit", label: "Stock Requests" },
     { id: "reports", icon: "assessment", label: "Reports" },
@@ -444,11 +582,11 @@ export default function ManagerDashboard() {
   ];
 
   const greeting = getGreeting();
-  const totalStock = inventory.reduce((sum, i) => sum + i.quantity, 0);
+  const totalInventoryValue = inventory.reduce((sum, i) => sum + ((i.quantity || 0) * (i.pricePerUnit || 0)), 0);
   const pendingRequests = stockRequests.filter(r => r.status === "PENDING").length;
 
   const formatDate = (d?: string) => {
-    if (!d) return "—";
+    if (!d) return "â€”";
     return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   };
 
@@ -465,7 +603,7 @@ export default function ManagerDashboard() {
     i.ingredientName.toLowerCase().includes(inventorySearch.toLowerCase())
   );
 
-  // ── Page title helper ──────────────────────────────────────────────────────
+  // â”€â”€ Page title helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const pageTitle: Record<string, string> = {
     dashboard: `${greeting}, ${managerName}`,
     inventory: "Branch Inventory",
@@ -476,11 +614,11 @@ export default function ManagerDashboard() {
     staff: "Staff",
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <div className="bg-[#f5f6f8] text-[#2c2f31] min-h-screen font-['Inter'] antialiased">
 
-      {/* ── Add New Ingredient Modal ─────────────────────────────────────── */}
+      {/* â”€â”€ Add New Ingredient Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {showAddModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden animate-[fadeInUp_0.25s_ease]">
@@ -589,6 +727,21 @@ export default function ManagerDashboard() {
                   className="w-full bg-[#eff1f3] border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#c5fe3c] outline-none"
                 />
               </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-[#595c5e] uppercase tracking-widest mb-1.5">
+                  Price Per Unit
+                </label>
+                <input
+                  value={newPricePerUnit || ""}
+                  onChange={e => setNewPricePerUnit(Number(e.target.value))}
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="w-full bg-[#eff1f3] border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#c5fe3c] outline-none"
+                  placeholder="0.00"
+                />
+              </div>
             </div>
 
             {/* Modal Footer */}
@@ -608,7 +761,7 @@ export default function ManagerDashboard() {
         </div>
       )}
 
-      {/* ── Sidebar ──────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <aside className="h-screen w-64 fixed left-0 top-0 bg-[#0c0f10] flex flex-col py-8 px-4 z-50 shadow-[0px_24px_48px_rgba(44,47,49,0.12)]">
         <div className="mb-12 px-4">
           <h1 className="text-2xl font-black text-[#c5fe3c] tracking-tighter">Ventorie</h1>
@@ -618,8 +771,8 @@ export default function ManagerDashboard() {
           {navItems.map(item => (
             <button key={item.id} onClick={() => setActiveTab(item.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-all duration-300 ${activeTab === item.id
-                  ? "text-[#c5fe3c] border-l-4 border-[#496400] bg-gradient-to-r from-[#496400]/10 to-transparent font-bold tracking-tight translate-x-1"
-                  : "text-gray-400 hover:text-white hover:bg-white/5 font-medium tracking-tight border-l-4 border-transparent"
+                ? "text-[#c5fe3c] border-l-4 border-[#496400] bg-gradient-to-r from-[#496400]/10 to-transparent font-bold tracking-tight translate-x-1"
+                : "text-gray-400 hover:text-white hover:bg-white/5 font-medium tracking-tight border-l-4 border-transparent"
                 }`}>
               <span className="material-symbols-outlined text-lg">{item.icon}</span>
               <span className="text-sm">{item.label}</span>
@@ -634,7 +787,7 @@ export default function ManagerDashboard() {
         </div>
       </aside>
 
-      {/* ── Main ─────────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <main className="ml-64 min-h-screen pb-12">
         {/* Top Bar */}
         <header className="flex justify-between items-center px-6 py-3 mx-6 mt-4 rounded-xl bg-white/80 backdrop-blur-md shadow-sm border border-black/5">
@@ -691,7 +844,7 @@ export default function ManagerDashboard() {
                             <span className="text-[10px] font-black text-white bg-[#b02500] px-2 py-0.5 rounded-full">LOW</span>
                           </div>
                           <p className="text-[10px] font-bold text-[#595c5e]">
-                            Current: <span className="text-[#0c0f10]">{a.currentQuantity}</span> • Threshold:{" "}
+                            Current: <span className="text-[#0c0f10]">{a.currentQuantity}</span> â€¢ Threshold:{" "}
                             <span className="text-[#0c0f10]">{a.threshold}</span>
                           </p>
                         </button>
@@ -759,16 +912,15 @@ export default function ManagerDashboard() {
               )}
               {activeTab === "dashboard" && (
                 <>
-                  <button className="bg-white text-[#496400] py-2.5 px-6 rounded-xl font-semibold text-sm hover:-translate-y-0.5 transition-all border border-black/5 shadow-sm">Export Report</button>
-                  <button className="bg-[#c5fe3c] text-[#364b00] py-2.5 px-6 rounded-xl font-bold text-sm shadow-[0_4px_14px_0_rgba(197,254,60,0.4)] hover:-translate-y-0.5 transition-all">New Order</button>
+
                 </>
               )}
             </div>
           </div>
 
-          {/* ══════════════════════════════════════════════════════════════
+          {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
               TAB: DASHBOARD
-          ══════════════════════════════════════════════════════════════ */}
+          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
           {activeTab === "dashboard" && (
             <>
               {/* Stats Grid */}
@@ -778,8 +930,8 @@ export default function ManagerDashboard() {
                     <div className="p-2 bg-[#496400]/10 rounded-lg"><span className="material-symbols-outlined text-[#496400]">inventory</span></div>
                     <span className="text-[11px] font-bold py-1 px-2 bg-[#455f00] text-[#deff95] rounded-full">{inventory.length} items</span>
                   </div>
-                  <p className="text-[#595c5e] text-sm font-medium">Available Stock</p>
-                  <h3 className="text-2xl font-bold mt-1">{loading ? "—" : `${totalStock.toLocaleString()} units`}</h3>
+                  <p className="text-[#595c5e] text-sm font-medium">Inventory Value</p>
+                  <h3 className="text-2xl font-bold mt-1">{loading ? "â€”" : `â‚¹${totalInventoryValue.toLocaleString()}`}</h3>
                 </div>
 
                 <div className="bg-white p-6 rounded-xl hover:-translate-y-1 transition-all shadow-sm border border-black/5">
@@ -788,7 +940,7 @@ export default function ManagerDashboard() {
                     {lowStockAlerts.length > 0 && <span className="text-[11px] font-bold py-1 px-2 bg-[#b02500] text-white rounded-full">Action required</span>}
                   </div>
                   <p className="text-[#595c5e] text-sm font-medium">Low Stock Alerts</p>
-                  <h3 className="text-2xl font-bold mt-1">{loading ? "—" : `${lowStockAlerts.length} items`}</h3>
+                  <h3 className="text-2xl font-bold mt-1">{loading ? "â€”" : `${lowStockAlerts.length} items`}</h3>
                 </div>
 
                 <div className="bg-white p-6 rounded-xl hover:-translate-y-1 transition-all shadow-sm border border-black/5">
@@ -796,7 +948,7 @@ export default function ManagerDashboard() {
                     <div className="p-2 bg-[#5d5f00]/10 rounded-lg"><span className="material-symbols-outlined text-[#5d5f00]">shopping_basket</span></div>
                   </div>
                   <p className="text-[#595c5e] text-sm font-medium">Stock Requests</p>
-                  <h3 className="text-2xl font-bold mt-1">{loading ? "—" : `${stockRequests.length} total`}</h3>
+                  <h3 className="text-2xl font-bold mt-1">{loading ? "â€”" : `${stockRequests.length} total`}</h3>
                 </div>
 
                 <div className="bg-white p-6 rounded-xl hover:-translate-y-1 transition-all shadow-sm border border-black/5 border-l-4 border-l-[#c5fe3c]">
@@ -804,7 +956,7 @@ export default function ManagerDashboard() {
                     <div className="p-2 bg-[#eff1f3] rounded-lg"><span className="material-symbols-outlined text-[#595c5e]">pending_actions</span></div>
                   </div>
                   <p className="text-[#595c5e] text-sm font-medium">Pending Requests</p>
-                  <h3 className="text-2xl font-bold mt-1">{loading ? "—" : `${pendingRequests} requests`}</h3>
+                  <h3 className="text-2xl font-bold mt-1">{loading ? "â€”" : `${pendingRequests} requests`}</h3>
                 </div>
               </div>
 
@@ -903,16 +1055,16 @@ export default function ManagerDashboard() {
             </>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════
+          {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
               TAB: BRANCH INVENTORY
-          ══════════════════════════════════════════════════════════════ */}
+          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
           {activeTab === "inventory" && (
             <>
               {/* Summary row */}
               <div className="flex gap-4 mb-8">
                 {[
                   { label: "Total Items", value: inventory.length, icon: "inventory_2", color: "text-[#496400]", bg: "bg-[#496400]/10" },
-                  { label: "Total Stock", value: `${totalStock.toLocaleString()} units`, icon: "scale", color: "text-[#5d5f00]", bg: "bg-[#5d5f00]/10" },
+                  { label: "Inventory Value", value: `â‚¹${totalInventoryValue.toLocaleString()}`, icon: "payments", color: "text-[#5d5f00]", bg: "bg-[#5d5f00]/10" },
                   { label: "Low / Critical", value: inventory.filter(i => stockLevel(i.quantity, i.threshold) !== "ok").length, icon: "warning", color: "text-[#b02500]", bg: "bg-[#b02500]/10" },
                 ].map(s => (
                   <div key={s.label} className="flex-1 bg-white rounded-xl p-5 flex items-center gap-4 shadow-sm border border-black/5">
@@ -927,7 +1079,7 @@ export default function ManagerDashboard() {
                 ))}
               </div>
 
-              {/* ── Ingredient list table ── */}
+              {/* â”€â”€ Ingredient list table â”€â”€ */}
               <div className="bg-white rounded-2xl shadow-sm border border-black/5 overflow-hidden">
 
                 {/* Column headers */}
@@ -970,7 +1122,7 @@ export default function ManagerDashboard() {
                           key={item.id}
                           className="grid grid-cols-[2fr_1.2fr_1.5fr_1.8fr_1.5fr_auto] gap-6 items-center px-8 py-6 hover:bg-[#fafafa] transition-colors border-b border-black-[0.02] last:border-b-0 group"
                         >
-                          {/* Col 1 — Ingredient / ID */}
+                          {/* Col 1 â€” Ingredient / ID */}
                           <div className="flex items-center gap-4">
                             <div className="relative w-12 h-12 rounded-xl bg-[#13171a] flex items-center justify-center overflow-hidden flex-shrink-0">
                               {level === "critical" && (
@@ -987,7 +1139,7 @@ export default function ManagerDashboard() {
                             </div>
                           </div>
 
-                          {/* Col 2 — Current Level */}
+                          {/* Col 2 â€” Current Level */}
                           <div>
                             <div className="flex items-center gap-1.5">
                               <p className={`text-sm font-black ${level === "critical" ? "text-[#dc2626]" : "text-[#2563eb]"
@@ -1001,7 +1153,7 @@ export default function ManagerDashboard() {
                             </div>
                           </div>
 
-                          {/* Col 3 — Expiry Risk */}
+                          {/* Col 3 â€” Expiry Risk */}
                           <div>
                             <p className={`text-sm font-bold ${level === "critical" ? "text-[#dc2626]" : "text-[#0c0f10]"
                               }`}>
@@ -1013,7 +1165,7 @@ export default function ManagerDashboard() {
                             </p>
                           </div>
 
-                          {/* Col 4 — Usage Rate */}
+                          {/* Col 4 â€” Usage Rate */}
                           <div className="flex items-center gap-3">
                             <span className="text-[11px] font-bold text-[#0c0f10] tracking-tight">{usageRate}% / day</span>
                             <div className="h-1.5 bg-[#eff1f3] rounded-full overflow-hidden w-12">
@@ -1021,7 +1173,7 @@ export default function ManagerDashboard() {
                             </div>
                           </div>
 
-                          {/* Col 5 — New Stock */}
+                          {/* Col 5 â€” New Stock */}
                           <div>
                             {level === "critical" ? (
                               <button className="bg-[#0c0f10] text-[#c5fe3c] text-[9px] font-black px-4 py-2.5 rounded-lg hover:bg-[#1f2937] transition-all tracking-widest uppercase">
@@ -1034,15 +1186,15 @@ export default function ManagerDashboard() {
                             )}
                           </div>
 
-                          {/* Col 6 — Branch Action */}
+                          {/* Col 6 â€” Branch Action */}
                           <div className="flex items-center gap-4 justify-end transition-opacity">
-                            <button 
+                            <button
                               onClick={() => openEditModal(item)}
                               className="text-[#3b82f6] hover:scale-110 transition-transform"
                             >
                               <span className="material-symbols-outlined text-[18px]">edit</span>
                             </button>
-                            <button 
+                            <button
                               onClick={() => handleDeleteInventory(item.id)}
                               className="text-[#ef4444] hover:scale-110 transition-transform"
                             >
@@ -1077,9 +1229,9 @@ export default function ManagerDashboard() {
             </>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════
+          {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
               TAB: STOCK REQUESTS
-          ══════════════════════════════════════════════════════════════ */}
+          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
           {activeTab === "stock-requests" && (
             <div className="grid grid-cols-12 gap-8">
               {/* Request Form */}
@@ -1139,10 +1291,10 @@ export default function ManagerDashboard() {
                             <tr key={req.id} className="hover:bg-[#fafafa] transition-colors group">
                               <td className="px-6 py-5 text-sm font-bold text-[#0c0f10]">#{`REQ-${req.id}`}</td>
                               <td className="px-6 py-5">
-                                <span className="font-semibold">{req.productName || req.ingredientName || "—"}</span>
+                                <span className="font-semibold">{req.productName || req.ingredientName || "â€”"}</span>
                               </td>
                               <td className="px-6 py-5">
-                                <span className="text-sm font-black">{req.requestedQuantity || req.quantity || "—"}</span>
+                                <span className="text-sm font-black">{req.requestedQuantity || req.quantity || "â€”"}</span>
                               </td>
                               <td className="px-6 py-5">
                                 <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold tracking-tight ${statusBadge(req.status)}`}>
@@ -1173,18 +1325,18 @@ export default function ManagerDashboard() {
             </div>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════
+          {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
               TAB: PRODUCTS (catalog view for branch manager)
-          ══════════════════════════════════════════════════════════════ */}
+          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
           {activeTab === "update-stock" && (
             <div className="space-y-8">
-              {/* Stats Grid — match owner Product page */}
+              {/* Stats Grid â€” match owner Product page */}
               <section className="grid grid-cols-1 md:grid-cols-4 gap-8">
                 <div className="col-span-2 bg-white p-6 rounded-xl shadow-[0px_24px_48px_rgba(44,47,49,0.06)] flex flex-col justify-between overflow-hidden relative group">
                   <div className="z-10">
                     <p className="text-[#595c5e] text-sm font-medium mb-1">Total Inventory Value</p>
                     <h2 className="text-4xl font-extrabold tracking-tight text-[#2c2f31]">
-                      ₹{products.reduce((sum, p) => sum + (p.price || 0), 0).toLocaleString()}
+                      â‚¹{products.reduce((sum, p) => sum + (p.price || 0), 0).toLocaleString()}
                     </h2>
                   </div>
                   <div className="mt-4 flex items-center gap-2 z-10">
@@ -1211,7 +1363,7 @@ export default function ManagerDashboard() {
                 </div>
               </section>
 
-              {/* Table Section — match owner Product page */}
+              {/* Table Section â€” match owner Product page */}
               <section className="space-y-6">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold tracking-tight">Product Catalog</h3>
@@ -1299,7 +1451,7 @@ export default function ManagerDashboard() {
                               </div>
                             </td>
                             <td className="px-6 py-5 text-center">
-                              <span className="text-sm font-bold text-[#2c2f31]">₹{(product.price || 0).toFixed(2)}</span>
+                              <span className="text-sm font-bold text-[#2c2f31]">â‚¹{(product.price || 0).toFixed(2)}</span>
                             </td>
                             <td className="px-6 py-5 text-right">
                               <button
@@ -1326,9 +1478,9 @@ export default function ManagerDashboard() {
             </div>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════
+          {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
               TAB: ORDERS
-          ══════════════════════════════════════════════════════════════ */}
+          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
           {activeTab === "orders" && (
             <div className="grid grid-cols-12 gap-8">
               <div className="col-span-12 flex flex-col">
@@ -1376,18 +1528,18 @@ export default function ManagerDashboard() {
                             .map(b => (
                               <tr key={b.id} className="hover:bg-[#fafafa] transition-colors">
                                 <td className="px-6 py-5 text-sm font-bold text-[#0c0f10]">#{b.id}</td>
-                                <td className="px-6 py-5 text-sm font-bold text-[#496400]">#{b.order?.id ?? "—"}</td>
+                                <td className="px-6 py-5 text-sm font-bold text-[#496400]">#{b.order?.id ?? "â€”"}</td>
                                 <td className="px-6 py-5 text-sm font-semibold text-[#0c0f10]">{b.productName}</td>
                                 <td className="px-6 py-5 text-sm">{b.quantity}</td>
                                 <td className="px-6 py-5 text-sm text-[#595c5e]">
-                                  <div className="font-medium text-[#0c0f10]">{b.customer?.name || "—"}</div>
+                                  <div className="font-medium text-[#0c0f10]">{b.customer?.name || "â€”"}</div>
                                   {b.customer?.phone && <div className="text-xs text-[#abadaf]">{b.customer.phone}</div>}
                                 </td>
                                 <td className="px-6 py-5 text-right text-sm font-black text-[#0c0f10]">
-                                  ₹{Number(b.totalAmount).toFixed(2)}
+                                  â‚¹{Number(b.totalAmount).toFixed(2)}
                                 </td>
                                 <td className="px-6 py-5 text-right text-xs font-medium text-[#595c5e] whitespace-nowrap">
-                                  {b.createdAt ? new Date(b.createdAt).toLocaleDateString() : "—"}
+                                  {b.createdAt ? new Date(b.createdAt).toLocaleDateString() : "â€”"}
                                 </td>
                               </tr>
                             ))}
@@ -1400,10 +1552,290 @@ export default function ManagerDashboard() {
             </div>
           )}
 
-          {/* ══════════════════════════════════════════════════════════════
+          {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+              TAB: BILLING
+          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+          {activeTab === "billing" && (
+            <div className="space-y-6">
+              {/* Sub-tab switcher */}
+              <div className="flex gap-1 bg-[#eff1f3] p-1 rounded-xl w-fit">
+                {(["products", "checkout", "history"] as const).map(t => (
+                  <button key={t} onClick={() => { setBillingTab(t); if (t === "history") fetchBillingHistory(); }}
+                    className={`px-5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all capitalize ${billingTab === t ? "bg-white text-[#0c0f10] shadow-sm" : "text-[#595c5e] hover:text-[#0c0f10]"
+                      }`}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+
+              {/* Products sub-tab */}
+              {billingTab === "products" && (
+                <div className="flex gap-6">
+                  <div className="flex-1 space-y-5">
+                    <div className="relative">
+                      <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+                      <input className="w-full pl-12 pr-4 py-3 bg-white rounded-2xl border border-black/5 outline-none focus:ring-2 focus:ring-[#c5fe3c]/50 text-sm font-medium shadow-sm"
+                        placeholder="Search products..." value={billingSearch} onChange={e => setBillingSearch(e.target.value)} />
+                    </div>
+                    <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                      {["All", ...Array.from(new Set(products.map(p => p.category || "")))].filter(Boolean).map(cat => (
+                        <button key={cat} onClick={() => setBillingCategory(cat)}
+                          className={`px-5 py-2 rounded-full text-xs font-black whitespace-nowrap transition-all ${billingCategory === cat ? "bg-[#c5fe3c] text-[#364b00] shadow-md" : "bg-white text-slate-400 border border-black/5"
+                            }`}>{cat}</button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                      {products
+                        .filter(p => (billingCategory === "All" || p.category === billingCategory) && p.name.toLowerCase().includes(billingSearch.toLowerCase()))
+                        .map(p => {
+                          const cartItem = billingCart.find(i => i.id === p.id);
+                          return (
+                            <div key={p.id} className="bg-white rounded-2xl p-4 shadow-sm border border-black/5 flex flex-col group hover:shadow-lg transition-all">
+                              <div className="relative h-32 w-full mb-3 rounded-xl overflow-hidden bg-slate-100 flex items-center justify-center">
+                                {p.imageUrl ? (
+                                  <img src={p.imageUrl} alt={p.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                    onError={(e) => { (e.target as any).src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400&auto=format&fit=crop"; }} />
+                                ) : (
+                                  <span className="material-symbols-outlined text-4xl text-slate-300">image</span>
+                                )}
+                                <div className="absolute top-2 right-2 px-2 py-0.5 bg-white/80 backdrop-blur-md rounded-lg text-[9px] font-black uppercase text-slate-500">{p.category}</div>
+                              </div>
+                              <h3 className="font-bold text-sm text-slate-800 line-clamp-1">{p.name}</h3>
+                              <p className="text-xs text-slate-400 line-clamp-1 mt-0.5 mb-3 flex-grow">{p.description}</p>
+                              <div className="flex items-center justify-between mt-auto">
+                                <span className="text-lg font-black text-[#496400]">â‚¹{p.price.toFixed(2)}</span>
+                                {cartItem ? (
+                                  <div className="flex items-center bg-[#c5fe3c]/10 rounded-xl border border-[#c5fe3c]/30 overflow-hidden">
+                                    <button onClick={() => billingUpdateQty(p.id, -1)} className="p-2 hover:bg-[#c5fe3c] transition-colors"><span className="material-symbols-outlined text-sm">remove</span></button>
+                                    <span className="px-3 text-xs font-black text-[#364b00]">{cartItem.qty}</span>
+                                    <button onClick={() => billingUpdateQty(p.id, 1)} className="p-2 hover:bg-[#c5fe3c] transition-colors"><span className="material-symbols-outlined text-sm">add</span></button>
+                                  </div>
+                                ) : (
+                                  <button onClick={() => billingAddToCart(p)}
+                                    className="bg-[#c5fe3c] text-[#364b00] px-4 py-2 rounded-xl font-bold text-sm shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[18px]">add</span> Add
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+
+                  {/* Cart sidebar */}
+                  <aside className="w-72 bg-white rounded-2xl p-6 shadow-xl border border-black/5 h-fit sticky top-24 flex flex-col min-h-[400px]">
+                    <div className="flex justify-between items-center mb-5">
+                      <h2 className="text-base font-black">Cart</h2>
+                      <span className="bg-[#eff1f3] px-3 py-1 rounded-full text-[10px] font-black text-[#595c5e]">{billingCart.reduce((s, i) => s + i.qty, 0)} items</span>
+                    </div>
+                    <div className="flex-grow space-y-3 overflow-y-auto no-scrollbar">
+                      {billingCart.length > 0 ? billingCart.map(item => (
+                        <div key={item.id} className="flex items-center gap-3 group">
+                          <div className="bg-slate-100 h-9 w-9 rounded-lg flex items-center justify-center text-[10px] font-black text-slate-500 shrink-0">x{item.qty}</div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold truncate">{item.name}</p>
+                            <p className="text-[11px] font-black text-[#496400]">â‚¹{(item.price * item.qty).toFixed(2)}</p>
+                          </div>
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => billingUpdateQty(item.id, -1)} className="p-1 hover:bg-slate-100 rounded"><span className="material-symbols-outlined text-xs">remove</span></button>
+                            <button onClick={() => billingUpdateQty(item.id, 1)} className="p-1 hover:bg-slate-100 rounded"><span className="material-symbols-outlined text-xs">add</span></button>
+                          </div>
+                        </div>
+                      )) : (
+                        <div className="flex flex-col items-center justify-center py-12 text-slate-300">
+                          <span className="material-symbols-outlined text-5xl mb-2">shopping_bag</span>
+                          <p className="text-xs font-bold text-center">Cart is empty</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="pt-4 border-t mt-4 space-y-3">
+                      <div className="flex justify-between items-end">
+                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Subtotal</span>
+                        <span className="text-xl font-black">â‚¹{billingCartTotal.toFixed(2)}</span>
+                      </div>
+                      <button onClick={() => setBillingTab("checkout")} disabled={billingCart.length === 0}
+                        className="w-full py-3 bg-black text-[#c5fe3c] font-black rounded-xl text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30">
+                        Proceed to Checkout
+                      </button>
+                    </div>
+                  </aside>
+                </div>
+              )}
+
+              {/* Checkout sub-tab */}
+              {billingTab === "checkout" && (
+                <div className="flex gap-8">
+                  <div className="flex-1 bg-white rounded-2xl p-8 shadow-sm border border-black/5 space-y-6">
+                    <h3 className="text-xl font-black">Customer Information</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Customer Name</label>
+                        <input type="text" value={billingCustomerName} onChange={e => setBillingCustomerName(e.target.value)}
+                          className="w-full bg-[#eff1f3] border-none rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#c5fe3c]"
+                          placeholder="Walk-in Guest" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Phone</label>
+                        <input type="tel" value={billingCustomerPhone} onChange={e => setBillingCustomerPhone(e.target.value)}
+                          className="w-full bg-[#eff1f3] border-none rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#c5fe3c]"
+                          placeholder="+91 XXXXX XXXXX" />
+                      </div>
+                    </div>
+                    {billingError && <p className="text-red-500 text-xs font-semibold">{billingError}</p>}
+                  </div>
+
+                  {/* Invoice preview */}
+                  <aside className="w-72 bg-[#0c0f10] rounded-2xl overflow-hidden shadow-2xl flex flex-col h-fit sticky top-24">
+                    <div className="p-6 border-b border-white/10">
+                      <p className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-4">#INV-PREVIEW</p>
+                      <div className="space-y-3 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-white/50">Customer</span>
+                          <span className="text-[#c5fe3c] font-bold">{billingCustomerName || "Walk-in"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-white/50">Branch</span>
+                          <span className="text-white font-bold">{branchName}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-6 space-y-2 max-h-40 overflow-y-auto no-scrollbar">
+                      {billingCart.map(item => (
+                        <div key={item.id} className="flex justify-between text-xs">
+                          <span className="text-white/60">{item.name} x{item.qty}</span>
+                          <span className="text-white font-bold">â‚¹{(item.price * item.qty).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="p-6 border-t border-white/10">
+                      <div className="flex justify-between mb-4">
+                        <span className="text-white/50 text-sm">Total</span>
+                        <span className="text-white font-black text-xl">â‚¹{billingCartTotal.toFixed(2)}</span>
+                      </div>
+                      <button onClick={handleFinalizeBilling} disabled={isFinalizing || billingCart.length === 0}
+                        className="w-full py-3 bg-[#c5fe3c] text-[#364b00] font-black rounded-xl text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40">
+                        {isFinalizing ? "Processing..." : "Finalize & Store"}
+                      </button>
+                    </div>
+                  </aside>
+                </div>
+              )}
+
+              {/* History sub-tab */}
+              {billingTab === "history" && (
+                <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-black/5">
+                  <div className="p-5 border-b border-black/5 bg-[#f5f6f8] flex justify-between items-center">
+                    <h3 className="font-black text-sm">Billing History â€” {branchName}</h3>
+                    <button onClick={fetchBillingHistory} className="text-[10px] font-black text-[#496400] uppercase tracking-widest hover:underline">Refresh</button>
+                  </div>
+                  <table className="w-full text-left">
+                    <thead className="bg-[#f5f6f8]">
+                      <tr>
+                        {["Customer", "Product", "Qty", "Amount", "Date"].map(h => (
+                          <th key={h} className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#f5f6f8]">
+                      {billingHistory.length > 0 ? billingHistory.map((b: any, idx: number) => (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 py-4">
+                            <p className="text-sm font-semibold">{b.customer?.name || "Walk-in"}</p>
+                            <p className="text-[10px] text-slate-400">{b.customer?.phone}</p>
+                          </td>
+                          <td className="px-6 py-4 text-sm font-medium">{b.productName}</td>
+                          <td className="px-6 py-4 text-sm">{b.quantity}</td>
+                          <td className="px-6 py-4"><span className="text-sm font-black text-[#496400]">â‚¹{b.totalAmount?.toLocaleString()}</span></td>
+                          <td className="px-6 py-4 text-xs text-slate-400">{new Date(b.createdAt).toLocaleDateString()}</td>
+                        </tr>
+                      )) : (
+                        <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-sm">No billing history yet.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+              TAB: STAFF
+          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+          {activeTab === "staff" && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-2xl font-black tracking-tight text-[#0c0f10]">Branch Team</h3>
+                  <p className="text-sm text-[#595c5e] mt-0.5">{branchName}</p>
+                </div>
+                <button onClick={() => { fetchStaff(); setShowAddStaffModal(true); }}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[#c5fe3c] text-[#364b00] rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-md">
+                  <span className="material-symbols-outlined text-sm">person_add</span>
+                  Add Staff
+                </button>
+              </div>
+
+              {staffList.length === 0 && managerList.length === 0 && (
+                <div className="flex justify-center py-4">
+                  <button onClick={fetchStaff} className="text-xs font-black text-[#496400] uppercase tracking-widest hover:underline flex items-center gap-1">
+                    <span className="material-symbols-outlined text-sm">refresh</span> Load Team
+                  </button>
+                </div>
+              )}
+
+              {managerList.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-3">Managers ({managerList.length})</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {managerList.map(u => (
+                      <div key={u.id} className="bg-white rounded-2xl p-5 shadow-sm border border-black/5 flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-lg shrink-0">{u.name.charAt(0).toUpperCase()}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-black text-sm text-[#0c0f10] truncate">{u.name}</p>
+                          <p className="text-[11px] text-[#595c5e] truncate">{u.email}</p>
+                          <p className="text-[10px] text-[#abadaf]">{u.phone}</p>
+                        </div>
+                        <span className="text-[9px] font-black bg-blue-100 text-blue-700 px-2 py-1 rounded-full uppercase tracking-widest shrink-0">MGR</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-purple-600 mb-3">Staff ({staffList.length})</p>
+                {staffList.length === 0 ? (
+                  <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-black/5">
+                    <span className="material-symbols-outlined text-4xl text-slate-300 block mb-2">group_off</span>
+                    <p className="text-slate-400 text-sm font-semibold">No staff assigned yet.</p>
+                    <button onClick={() => setShowAddStaffModal(true)} className="mt-4 text-xs font-black text-[#496400] uppercase tracking-widest hover:underline">
+                      + Add first staff member
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {staffList.map(u => (
+                      <div key={u.id} className="bg-white rounded-2xl p-5 shadow-sm border border-black/5 flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-purple-600 flex items-center justify-center text-white font-black text-lg shrink-0">{u.name.charAt(0).toUpperCase()}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-black text-sm text-[#0c0f10] truncate">{u.name}</p>
+                          <p className="text-[11px] text-[#595c5e] truncate">{u.email}</p>
+                          <p className="text-[10px] text-[#abadaf]">{u.phone}</p>
+                        </div>
+                        <span className="text-[9px] font-black bg-purple-100 text-purple-700 px-2 py-1 rounded-full uppercase tracking-widest shrink-0">STAFF</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
               PLACEHOLDER TABS
-          ══════════════════════════════════════════════════════════════ */}
-          {!["dashboard", "inventory", "stock-requests", "orders"].includes(activeTab) && (
+          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+          {!["dashboard", "inventory", "stock-requests", "orders", "billing", "update-stock", "staff"].includes(activeTab) && (
             <div className="flex flex-col items-center justify-center py-32 gap-4">
               <div className="w-20 h-20 rounded-2xl bg-[#eff1f3] flex items-center justify-center">
                 <span className="material-symbols-outlined text-4xl text-[#abadaf]">
@@ -1426,6 +1858,54 @@ export default function ManagerDashboard() {
         <span className="material-symbols-outlined text-3xl">add</span>
       </button>
 
+      {/* â”€â”€ Staff Tab Content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {activeTab === "staff" && (
+        <div className="fixed inset-0 z-0 pointer-events-none" />
+      )}
+
+      {/* â”€â”€ Add Staff Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {showAddStaffModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="bg-[#0c0f10] px-8 py-6 flex justify-between items-center">
+              <div>
+                <h2 className="text-white font-black text-lg tracking-tight">Add Staff</h2>
+                <p className="text-white/40 text-xs mt-0.5">Register new staff for {branchName}</p>
+              </div>
+              <button onClick={() => setShowAddStaffModal(false)} className="text-white/50 hover:text-white">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-8 space-y-4">
+              {[
+                { label: "Full Name", value: staffFormName, setter: setStaffFormName, type: "text", placeholder: "e.g. Ravi Kumar" },
+                { label: "Email", value: staffFormEmail, setter: setStaffFormEmail, type: "email", placeholder: "name@company.com" },
+                { label: "Phone (10â€“15 digits)", value: staffFormPhone, setter: setStaffFormPhone, type: "tel", placeholder: "9876543210" },
+                { label: "Password", value: staffFormPassword, setter: setStaffFormPassword, type: "password", placeholder: "Min 8 chars, upper, lower, number, special" },
+              ].map(f => (
+                <div key={f.label}>
+                  <label className="block text-[11px] font-bold text-[#595c5e] uppercase tracking-widest mb-1.5">{f.label}</label>
+                  <input type={f.type} value={f.value} onChange={e => f.setter(e.target.value)}
+                    className="w-full bg-[#eff1f3] border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#c5fe3c] outline-none"
+                    placeholder={f.placeholder} />
+                </div>
+              ))}
+              {staffFormError && <p className="text-red-500 text-xs font-semibold">{staffFormError}</p>}
+            </div>
+            <div className="px-8 pb-8 flex gap-3">
+              <button onClick={() => setShowAddStaffModal(false)}
+                className="flex-1 py-3 rounded-xl border border-black/10 text-sm font-semibold hover:bg-[#eff1f3] transition-all">
+                Cancel
+              </button>
+              <button onClick={handleAddStaff} disabled={isAddingStaff}
+                className="flex-1 py-3 rounded-xl bg-[#c5fe3c] text-[#364b00] text-sm font-black shadow-[0_4px_14px_0_rgba(197,254,60,0.4)] hover:-translate-y-0.5 transition-all disabled:opacity-50">
+                {isAddingStaff ? "Creating..." : "Add Staff"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Product Editor Modal (manager add/edit + recipe) */}
       {showProductEditor && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -1445,140 +1925,108 @@ export default function ManagerDashboard() {
                   <label className="block text-[11px] font-bold text-[#595c5e] uppercase tracking-widest mb-1.5">Product Name</label>
                   <input value={prodName} onChange={e => setProdName(e.target.value)} className="w-full bg-[#eff1f3] rounded-xl px-4 py-3 text-sm outline-none" />
                 </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-[#595c5e] uppercase tracking-widest mb-1.5">Category</label>
-                  <select value={prodCategory} onChange={e => setProdCategory(e.target.value)} className="w-full bg-[#eff1f3] rounded-xl px-4 py-3 text-sm outline-none">
-                    <option>Main Course</option><option>Sides</option><option>Beverages</option><option>Desserts</option>
-                  </select>
-                </div>
+                {customCategoryInput ? (
+                  <div className="col-span-2">
+                    <label className="block text-[11px] font-bold text-[#595c5e] uppercase tracking-widest mb-1.5">Category</label>
+                    <div className="flex gap-2">
+                      <input autoFocus
+                        className="flex-1 bg-[#eff1f3] rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[#c5fe3c]"
+                        placeholder="New category name..."
+                        value={prodCategory}
+                        onChange={e => setProdCategory(e.target.value)}
+                      />
+                      <button type="button" onClick={() => setCustomCategoryInput(false)}
+                        className="px-3 py-2 bg-[#eff1f3] rounded-xl text-xs font-bold text-[#595c5e] hover:bg-[#e0e3e5]">✕</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#595c5e] uppercase tracking-widest mb-1.5">Category</label>
+                    <select value={prodCategory}
+                      onChange={e => {
+                        if (e.target.value === "__new__") { setProdCategory(""); setCustomCategoryInput(true); }
+                        else setProdCategory(e.target.value);
+                      }}
+                      className="w-full bg-[#eff1f3] rounded-xl px-4 py-3 text-sm outline-none">
+                      {Array.from(new Set(products.map(p => p.category).filter(Boolean))).map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                      {!products.some(p => p.category === prodCategory) && prodCategory && (
+                        <option value={prodCategory}>{prodCategory}</option>
+                      )}
+                      <option value="__new__">＋ Add new category...</option>
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="block text-[11px] font-bold text-[#595c5e] uppercase tracking-widest mb-1.5">Price</label>
                   <input type="number" value={prodPrice || ""} onChange={e => setProdPrice(Number(e.target.value))} className="w-full bg-[#eff1f3] rounded-xl px-4 py-3 text-sm outline-none" />
                 </div>
-                <div className="col-span-2">
-                  <label className="block text-[11px] font-bold text-[#595c5e] uppercase tracking-widest mb-1.5">Image URL</label>
-                  <input value={prodImageUrl} onChange={e => setProdImageUrl(e.target.value)} className="w-full bg-[#eff1f3] rounded-xl px-4 py-3 text-sm outline-none" />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-[11px] font-bold text-[#595c5e] uppercase tracking-widest mb-1.5">Description</label>
-                  <textarea value={prodDesc} onChange={e => setProdDesc(e.target.value)} className="w-full bg-[#eff1f3] rounded-xl px-4 py-3 text-sm outline-none min-h-[70px]" />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-[11px] font-bold text-[#595c5e] uppercase tracking-widest mb-1.5">Preparation Instructions</label>
-                  <textarea value={prodInstructions} onChange={e => setProdInstructions(e.target.value)} className="w-full bg-[#eff1f3] rounded-xl px-4 py-3 text-sm outline-none min-h-[90px]" />
-                </div>
               </div>
-
-              <div className="pt-3 border-t border-black/5 space-y-3">
-                <label className="block text-[11px] font-bold text-[#595c5e] uppercase tracking-widest">Recipe Composition</label>
-                <div className="relative">
-                  <input
-                    value={ingredientSearch}
-                    onChange={e => setIngredientSearch(e.target.value)}
-                    placeholder="Search ingredient from branch inventory..."
-                    className="w-full bg-[#eff1f3] rounded-xl px-4 py-3 text-sm outline-none pr-12"
-                  />
-                  <button type="button" onClick={() => addRecipeIngredient(ingredientSearch)} className="absolute right-2 top-2 bg-[#c5fe3c] text-[#364b00] p-1.5 rounded-md">
-                    <span className="material-symbols-outlined text-sm">add</span>
-                  </button>
-                  {ingredientSearch && (
-                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-[#eff1f3] rounded-xl shadow-xl z-50 max-h-40 overflow-y-auto">
-                      {inventory
-                        .filter(i => i.ingredientName.toLowerCase().includes(ingredientSearch.toLowerCase()))
-                        .map(i => (
-                          <button type="button" key={i.id} onClick={() => addRecipeIngredient(i.ingredientName)} className="block w-full text-left px-4 py-2 text-sm hover:bg-[#c5fe3c]/10">
-                            {i.ingredientName}
-                          </button>
-                        ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2 max-h-52 overflow-y-auto">
-                  {prodIngredients.length === 0 ? (
-                    <div className="text-xs text-[#abadaf] italic py-2">No recipe ingredients added.</div>
-                  ) : prodIngredients.map((ing, idx) => (
-                    <div key={idx} className="grid grid-cols-[1fr_110px_110px_auto] gap-2 items-center bg-[#f9fafb] border border-black/5 rounded-xl p-2.5">
-                      <div className="text-sm font-semibold truncate">{ing.ingredientName}</div>
-                      <input type="number" value={ing.quantity} onChange={e => updateRecipeIngredient(idx, "quantity", Number(e.target.value))} className="bg-white border border-black/10 rounded-lg px-2 py-1.5 text-sm outline-none" />
-                      <select value={ing.unit} onChange={e => updateRecipeIngredient(idx, "unit", e.target.value)} className="bg-white border border-black/10 rounded-lg px-2 py-1.5 text-sm outline-none">
-                        <option>kg</option><option>g</option><option>L</option><option>mL</option><option>units</option><option>pcs</option><option>boxes</option>
-                      </select>
-                      <button type="button" onClick={() => removeRecipeIngredient(idx)} className="p-1 text-error hover:bg-red-50 rounded-md">
-                        <span className="material-symbols-outlined text-[18px]">delete</span>
-                      </button>
-                    </div>
-                  ))}
-                </div>
+              <div className="col-span-2">
+                <label className="block text-[11px] font-bold text-[#595c5e] uppercase tracking-widest mb-1.5">Image URL</label>
+                <input value={prodImageUrl} onChange={e => setProdImageUrl(e.target.value)} className="w-full bg-[#eff1f3] rounded-xl px-4 py-3 text-sm outline-none" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-[11px] font-bold text-[#595c5e] uppercase tracking-widest mb-1.5">Description</label>
+                <textarea value={prodDesc} onChange={e => setProdDesc(e.target.value)} className="w-full bg-[#eff1f3] rounded-xl px-4 py-3 text-sm outline-none min-h-[70px]" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-[11px] font-bold text-[#595c5e] uppercase tracking-widest mb-1.5">Preparation Instructions</label>
+                <textarea value={prodInstructions} onChange={e => setProdInstructions(e.target.value)} className="w-full bg-[#eff1f3] rounded-xl px-4 py-3 text-sm outline-none min-h-[90px]" />
               </div>
             </div>
-            <div className="px-8 pb-8 flex gap-3">
-              <button onClick={() => setShowProductEditor(false)} className="flex-1 py-3 rounded-xl border border-black/10 text-sm font-semibold hover:bg-[#eff1f3]">
-                Cancel
-              </button>
-              <button onClick={handleSaveProduct} disabled={savingProduct || !prodName.trim()} className="flex-1 py-3 rounded-xl bg-[#c5fe3c] text-[#364b00] text-sm font-black disabled:opacity-50">
-                {savingProduct ? "Saving..." : (selectedProduct ? "Update Product" : "Create Product")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Recipe Details Modal (view-only) */}
-      {viewingRecipeProduct && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md transition-all">
-          <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300">
-            <div className="relative h-48 bg-[#eff1f3]">
-              {viewingRecipeProduct.imageUrl ? (
-                <img src={viewingRecipeProduct.imageUrl} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-4xl font-black text-[#e0e3e5] uppercase">
-                  {viewingRecipeProduct.name.charAt(0)}
-                </div>
-              )}
-              <button
-                onClick={() => setViewingRecipeProduct(null)}
-                className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white backdrop-blur-xl p-2 rounded-full transition-all"
-                type="button"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <div className="p-8">
-              <h3 className="text-2xl font-black tracking-tighter mb-1 uppercase">{viewingRecipeProduct.name}</h3>
-              <p className="text-xs text-[#595c5e] mb-6 font-medium italic">
-                #{viewingRecipeProduct.id} • {viewingRecipeProduct.category || "Uncategorized"}
-              </p>
-
-              <div className="space-y-6">
-                <div>
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#496400] mb-3">Ingredient Composition</h4>
-                  <div className="grid grid-cols-1 gap-2">
-                    {viewingRecipeProduct.recipes && viewingRecipeProduct.recipes.length > 0 ? (
-                      viewingRecipeProduct.recipes.map((ing, i) => (
-                        <div key={i} className="flex items-center justify-between p-3 bg-[#eff1f3]/50 rounded-2xl group hover:bg-[#c5fe3c]/10 transition-colors border border-[#eff1f3]">
-                          <span className="text-sm font-bold uppercase tracking-tighter text-[#2c2f31]">{ing.ingredientName}</span>
-                          <span className="bg-white px-2 py-1 rounded-lg text-[10px] font-black text-[#595c5e] shadow-sm">
-                            {ing.quantity} {ing.unit}
-                          </span>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-xs text-gray-400 italic">No ingredients found for this recipe.</p>
-                    )}
-                  </div>
-                </div>
-
-                {viewingRecipeProduct.instructions && (
-                  <div>
-                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#496400] mb-3">Preparation Guide</h4>
-                    <div className="p-4 bg-[#eff1f3]/50 rounded-2xl text-[13px] text-[#595c5e] leading-relaxed whitespace-pre-line border border-[#eff1f3]">
-                      {viewingRecipeProduct.instructions}
-                    </div>
+            <div className="pt-3 border-t border-black/5 space-y-3">
+              <label className="block text-[11px] font-bold text-[#595c5e] uppercase tracking-widest">Recipe Composition</label>
+              <div className="relative">
+                <input
+                  value={ingredientSearch}
+                  onChange={e => setIngredientSearch(e.target.value)}
+                  placeholder="Search ingredient from branch inventory..."
+                  className="w-full bg-[#eff1f3] rounded-xl px-4 py-3 text-sm outline-none pr-12"
+                />
+                <button type="button" onClick={() => addRecipeIngredient(ingredientSearch)} className="absolute right-2 top-2 bg-[#c5fe3c] text-[#364b00] p-1.5 rounded-md">
+                  <span className="material-symbols-outlined text-sm">add</span>
+                </button>
+                {ingredientSearch && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-[#eff1f3] rounded-xl shadow-xl z-50 max-h-40 overflow-y-auto">
+                    {inventory
+                      .filter(i => i.ingredientName.toLowerCase().includes(ingredientSearch.toLowerCase()))
+                      .map(i => (
+                        <button type="button" key={i.id} onClick={() => addRecipeIngredient(i.ingredientName)} className="block w-full text-left px-4 py-2 text-sm hover:bg-[#c5fe3c]/10">
+                          {i.ingredientName}
+                        </button>
+                      ))}
                   </div>
                 )}
               </div>
+
+              <div className="space-y-2 max-h-52 overflow-y-auto">
+                {prodIngredients.length === 0 ? (
+                  <div className="text-xs text-[#abadaf] italic py-2">No recipe ingredients added.</div>
+                ) : prodIngredients.map((ing, idx) => (
+                  <div key={idx} className="grid grid-cols-[1fr_110px_110px_auto] gap-2 items-center bg-[#f9fafb] border border-black/5 rounded-xl p-2.5">
+                    <div className="text-sm font-semibold truncate">{ing.ingredientName}</div>
+                    <input type="number" value={ing.quantity} onChange={e => updateRecipeIngredient(idx, "quantity", Number(e.target.value))} className="bg-white border border-black/10 rounded-lg px-2 py-1.5 text-sm outline-none" />
+                    <select value={ing.unit} onChange={e => updateRecipeIngredient(idx, "unit", e.target.value)} className="bg-white border border-black/10 rounded-lg px-2 py-1.5 text-sm outline-none">
+                      <option>kg</option><option>g</option><option>L</option><option>mL</option><option>units</option><option>pcs</option><option>boxes</option>
+                    </select>
+                    <button type="button" onClick={() => removeRecipeIngredient(idx)} className="p-1 text-error hover:bg-red-50 rounded-md">
+                      <span className="material-symbols-outlined text-[18px]">delete</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
+          </div>
+          <div className="px-8 pb-8 flex gap-3">
+            <button onClick={() => setShowProductEditor(false)} className="flex-1 py-3 rounded-xl border border-black/10 text-sm font-semibold hover:bg-[#eff1f3]">
+              Cancel
+            </button>
+            <button onClick={handleSaveProduct} disabled={savingProduct || !prodName.trim()} className="flex-1 py-3 rounded-xl bg-[#c5fe3c] text-[#364b00] text-sm font-black disabled:opacity-50">
+              {savingProduct ? "Saving..." : (selectedProduct ? "Update Product" : "Create Product")}
+            </button>
           </div>
         </div>
       )}

@@ -160,7 +160,7 @@ export default function BranchManagement() {
       <div className="flex-grow ml-64 min-h-screen flex flex-col relative">
         <Header title="Branch Management" subtitle="Administrative Node" searchPlaceholder="Search operational facilities..." icon="folder_shared" />
 
-        <main className="p-8 space-y-12">
+        <main className="pt-24 px-8 pb-8 space-y-12">
           <div className="flex justify-between items-end">
             <div>
               <p className="text-[#595c5e] text-xs font-black tracking-widest uppercase mb-1">Regional Network</p>

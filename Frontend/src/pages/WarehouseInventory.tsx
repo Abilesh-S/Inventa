@@ -10,6 +10,7 @@ interface WarehouseInventoryItem {
   id: number;
   ingredientName: string;
   quantity: number;
+  pricePerUnit?: number;
   threshold: number;
   unit: string;
   batchNumber: string;
@@ -27,6 +28,7 @@ export default function WarehouseInventory() {
   // Form State
   const [formName, setFormName] = useState("");
   const [formQty, setFormQty] = useState(0);
+  const [formPricePerUnit, setFormPricePerUnit] = useState(0);
   const [formBatch, setFormBatch] = useState("");
   const [formExpiry, setFormExpiry] = useState("");
   const [formUnit, setFormUnit] = useState("units");
@@ -35,8 +37,6 @@ export default function WarehouseInventory() {
   const [editingId, setEditingId] = useState<number | null>(null);
 
   // Notification Hub State
-  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
-  const [showNotifications, setShowNotifications] = useState(false);
   const [lowStockAlerts, setLowStockAlerts] = useState<any[]>([]);
   const [showLowStock, setShowLowStock] = useState(false);
 
@@ -52,21 +52,6 @@ export default function WarehouseInventory() {
       }
     } catch (err) {
       console.error("Failed to fetch inventory", err);
-    }
-  };
-
-  const fetchPendingRequests = async () => {
-    try {
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
-      const res = await fetch(`${API_BASE}/stock-requests/pending`, {
-        headers: { 'Authorization': getAuthHeader(user) }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setPendingRequests(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch pending requests", err);
     }
   };
 
@@ -108,12 +93,7 @@ export default function WarehouseInventory() {
     }
     fetchInventory();
     fetchWarehouse();
-    fetchPendingRequests();
     fetchLowStockAlerts();
-
-    // Auto-refresh notifications every 30 seconds
-    const interval = setInterval(fetchPendingRequests, 30000);
-    return () => clearInterval(interval);
   }, [navigate]);
 
   const handleSaveBatch = async () => {
@@ -129,6 +109,7 @@ export default function WarehouseInventory() {
         id: editingId,
         ingredientName: formName,
         quantity: formQty,
+        pricePerUnit: formPricePerUnit,
         unit: formUnit,
         batchNumber: formBatch,
         expiryDate: formExpiry,
@@ -154,6 +135,7 @@ export default function WarehouseInventory() {
         setFormQty(0);
         setFormBatch("");
         setFormExpiry("");
+        setFormPricePerUnit(0);
         setFormThreshold(10);
         setEditingId(null);
       } else {
@@ -171,6 +153,7 @@ export default function WarehouseInventory() {
     setFormName(item.ingredientName);
     setFormQty(item.quantity);
     setFormThreshold(item.threshold);
+    setFormPricePerUnit(item.pricePerUnit || 0);
     setFormUnit(item.unit);
     setFormBatch(item.batchNumber);
     setFormExpiry(item.expiryDate);
@@ -209,110 +192,86 @@ export default function WarehouseInventory() {
           onSearchChange={setSearchQuery}
         >
           <div className="flex items-center gap-6">
-            {/* Notification Hub */}
+            {/* Low stock alerts — warehouse + branches */}
             <div className="relative">
-              <button
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="relative p-2.5 bg-white border border-[#abadaf]/10 rounded-xl hover:bg-[#eff1f3] transition-colors"
-              >
-                <span className="material-symbols-outlined text-[#0c0f10] text-[22px]">notifications</span>
-                {pendingRequests.length > 0 && (
-                  <span className="absolute -top-1 -right-1 h-5 w-5 bg-error text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white animate-pulse">
-                    {pendingRequests.length}
-                  </span>
-                )}
-              </button>
-
-              {/* Notification Popover */}
-              {showNotifications && (
-                <div className="absolute right-0 mt-4 w-[320px] bg-white rounded-2xl shadow-2xl border border-black/5 z-[100] overflow-hidden">
-                  <div className="p-4 bg-[#f5f6f8] border-b border-black/5 flex justify-between items-center">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#0c0f10]">Pending Actions</p>
-                    <span className="text-[10px] font-bold text-error">{pendingRequests.length} New Requests</span>
-                  </div>
-                  <div className="max-h-[350px] overflow-y-auto no-scrollbar">
-                    {pendingRequests.length === 0 ? (
-                      <div className="p-10 text-center">
-                        <span className="material-symbols-outlined text-[40px] text-[#abadaf] opacity-20 block mb-2">check_circle</span>
-                        <p className="text-xs font-bold text-[#abadaf]">Logistics clear</p>
-                      </div>
-                    ) : (
-                      pendingRequests.map((req) => (
-                        <div key={req.id} className="p-4 border-b border-black/5 hover:bg-[#eff1f3]/50 transition-colors cursor-pointer group">
-                          <div className="flex justify-between items-start mb-1">
-                            <p className="text-sm font-black text-[#0c0f10] uppercase tracking-tighter">{req.ingredientName}</p>
-                            <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">Requested</span>
-                          </div>
-                          <p className="text-[10px] font-bold text-[#595c5e]">
-                            Branch: <span className="text-[#0c0f10]">#{req.branchId}</span> •
-                            Qty: <span className="text-[#0c0f10]">{req.requiredQuantity} {req.unit}</span>
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  <div className="p-3 bg-white border-t border-black/5 text-center">
-                    <button className="text-[10px] font-black text-[#0c0f10] uppercase tracking-widest hover:text-[#496400] transition-colors">
-                      View Operational Dashboard
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Low stock alerts */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowLowStock(v => !v)}
-                className="relative p-2.5 bg-white border border-[#abadaf]/10 rounded-xl hover:bg-[#eff1f3] transition-colors"
-              >
-                <span className="material-symbols-outlined text-[#0c0f10] text-[22px]">warning</span>
-                {lowStockAlerts.length > 0 && (
-                  <span className="absolute -top-1 -right-1 h-5 w-5 bg-error text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white animate-pulse">
-                    {lowStockAlerts.length}
-                  </span>
-                )}
-              </button>
-
-              {showLowStock && (
-                <div className="absolute right-0 mt-4 w-[320px] bg-white rounded-2xl shadow-2xl border border-black/5 z-[100] overflow-hidden">
-                  <div className="p-4 bg-[#f5f6f8] border-b border-black/5 flex justify-between items-center">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#0c0f10]">Low Stock Alerts</p>
-                    <span className="text-[10px] font-bold text-error">{lowStockAlerts.length} Items</span>
-                  </div>
-                  <div className="max-h-[350px] overflow-y-auto no-scrollbar">
-                    {lowStockAlerts.length === 0 ? (
-                      <div className="p-10 text-center">
-                        <span className="material-symbols-outlined text-[40px] text-[#abadaf] opacity-20 block mb-2">check_circle</span>
-                        <p className="text-xs font-bold text-[#abadaf]">All stock levels are healthy</p>
-                      </div>
-                    ) : (
-                      lowStockAlerts.map((a) => (
-                        <div key={a.id} className="p-4 border-b border-black/5 hover:bg-[#eff1f3]/50 transition-colors">
-                          <div className="flex justify-between items-start mb-1">
-                            <p className="text-sm font-black text-[#0c0f10] uppercase tracking-tighter">{a.ingredientName}</p>
-                            <span className="text-[10px] font-black text-white bg-error px-2 py-0.5 rounded-full">LOW</span>
-                          </div>
-                          <p className="text-[10px] font-bold text-[#595c5e]">
-                            Qty: <span className="text-[#0c0f10]">{a.currentQuantity}</span> • Threshold:{" "}
-                            <span className="text-[#0c0f10]">{a.threshold}</span>
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  <div className="p-3 bg-white border-t border-black/5 text-center">
+              {(() => {
+                const today = new Date();
+                const warehouseLow = inventory.filter(item => {
+                  const exp = item.expiryDate ? new Date(item.expiryDate) : null;
+                  return item.quantity <= item.threshold || (exp && exp < today);
+                }).map(item => ({
+                  key: `wh-${item.id}`,
+                  ingredientName: item.ingredientName,
+                  currentQuantity: item.quantity,
+                  threshold: item.threshold,
+                  source: "Warehouse",
+                  expired: !!(item.expiryDate && new Date(item.expiryDate) < today),
+                }));
+                const allLow = [...warehouseLow];
+                return (
+                  <>
                     <button
                       type="button"
-                      onClick={() => { setShowLowStock(false); navigate("/dashboard"); }}
-                      className="text-[10px] font-black text-[#0c0f10] uppercase tracking-widest hover:text-[#496400] transition-colors"
+                      onClick={() => setShowLowStock(v => !v)}
+                      className="relative p-2.5 bg-white border border-[#abadaf]/10 rounded-xl hover:bg-[#eff1f3] transition-colors"
                     >
-                      View dashboard alerts
+                      <span className="material-symbols-outlined text-[#0c0f10] text-[22px]">warning</span>
+                      {allLow.length > 0 && (
+                        <span className="absolute -top-1 -right-1 h-5 w-5 bg-error text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white animate-pulse">
+                          {allLow.length}
+                        </span>
+                      )}
                     </button>
-                  </div>
-                </div>
-              )}
+
+                    {showLowStock && (
+                      <div className="absolute right-0 mt-4 w-[340px] bg-white rounded-2xl shadow-2xl border border-black/5 z-[100] overflow-hidden">
+                        <div className="p-4 bg-[#f5f6f8] border-b border-black/5 flex justify-between items-center">
+                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#0c0f10]">Low Stock Alerts</p>
+                          <span className="text-[10px] font-bold text-error">{allLow.length} Items</span>
+                        </div>
+                        <div className="max-h-[380px] overflow-y-auto no-scrollbar divide-y divide-black/5">
+                          {allLow.length === 0 ? (
+                            <div className="p-10 text-center">
+                              <span className="material-symbols-outlined text-[40px] text-[#abadaf] opacity-20 block mb-2">check_circle</span>
+                              <p className="text-xs font-bold text-[#abadaf]">All stock levels are healthy</p>
+                            </div>
+                          ) : (
+                            allLow.map((a) => (
+                              <div key={a.key} className="p-4 hover:bg-[#eff1f3]/50 transition-colors">
+                                <div className="flex justify-between items-start mb-1">
+                                  <p className="text-sm font-black text-[#0c0f10] uppercase tracking-tighter capitalize">{a.ingredientName}</p>
+                                  <span className={`text-[10px] font-black text-white px-2 py-0.5 rounded-full ${a.expired ? "bg-red-600" : "bg-error"}`}>
+                                    {a.expired ? "EXPIRED" : "LOW"}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className={`material-symbols-outlined text-[12px] ${a.source === "Warehouse" ? "text-[#496400]" : "text-blue-500"}`}>
+                                    {a.source === "Warehouse" ? "warehouse" : "store"}
+                                  </span>
+                                  <span className="text-[10px] font-bold text-[#595c5e]">{a.source}</span>
+                                  <span className="text-[10px] text-[#abadaf]">•</span>
+                                  <span className="text-[10px] font-bold text-[#595c5e]">
+                                    Qty: <span className="text-[#0c0f10]">{a.currentQuantity}</span> / {a.threshold}
+                                  </span>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                        <div className="p-3 bg-white border-t border-black/5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => { setShowLowStock(false); navigate("/dashboard"); }}
+                            className="text-[10px] font-black text-[#0c0f10] uppercase tracking-widest hover:text-[#496400] transition-colors"
+                          >
+                            View dashboard alerts
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             <div className="h-10 w-px bg-black/5 hidden md:block"></div>
@@ -324,7 +283,8 @@ export default function WarehouseInventory() {
           </div>
         </Header>
 
-        <div className="p-8 space-y-8 flex-grow">
+        {/* pt-24 clears fixed Header (h-16 + breathing room), same as Dashboard / other owner pages */}
+        <div className="pt-24 px-8 pb-8 space-y-8 flex-grow">
           {/* Page Header & Actions */}
           <div className="flex items-end justify-between">
             <div>
@@ -344,6 +304,7 @@ export default function WarehouseInventory() {
                   setFormQty(0);
                   setFormBatch("");
                   setFormExpiry("");
+                  setFormPricePerUnit(0);
                   setFormThreshold(10);
                 }}
                 className="px-8 py-3 bg-black text-[#c5fe3c] font-black rounded-xl shadow-2xl hover:scale-105 transition-all flex items-center gap-2 uppercase tracking-wider text-xs"
@@ -359,17 +320,16 @@ export default function WarehouseInventory() {
             <div className="bg-white p-6 rounded-2xl shadow-[0px_24px_48px_rgba(0,0,0,0.04)] border-l-4 border-[#496400] hover:-translate-y-1 transition-all duration-300">
               <div className="flex justify-between items-start mb-4">
                 <div className="p-3 bg-[#c5fe3c]/20 rounded-xl">
-                  <span className="material-symbols-outlined text-[#496400]">inventory</span>
+                  <span className="material-symbols-outlined text-[#496400]">payments</span>
                 </div>
-                <span className="text-[10px] font-bold bg-[#eff1f3] px-2 py-1 rounded-full text-[#595c5e] tracking-widest uppercase">Stock</span>
+                <span className="text-[10px] font-bold bg-[#eff1f3] px-2 py-1 rounded-full text-[#595c5e] tracking-widest uppercase">Value</span>
               </div>
-              <p className="text-[#595c5e] text-sm font-medium mb-1">Available units (warehouse)</p>
+              <p className="text-[#595c5e] text-sm font-medium mb-1">Warehouse Value</p>
               <h3 className="text-3xl font-black tracking-tighter">
-                {inventory.reduce((sum, item) => sum + item.quantity, 0).toLocaleString()}{" "}
-                <span className="text-sm font-medium text-[#595c5e]">Units</span>
+                ₹{inventory.reduce((sum, item) => sum + ((item.quantity || 0) * (item.pricePerUnit || 0)), 0).toLocaleString()}
               </h3>
               <div className="mt-4 flex items-center gap-2">
-                <span className="text-[#496400] text-xs font-bold">84% Capacity</span>
+                <span className="text-[#496400] text-xs font-bold">Qty × Price/unit</span>
                 <span className="text-[#595c5e] text-[10px] font-medium italic">Global Hub</span>
               </div>
             </div>
@@ -392,40 +352,6 @@ export default function WarehouseInventory() {
                 <span className="text-sm font-medium text-[#595c5e]">Items</span>
               </h3>
               <p className="mt-4 text-[#595c5e] text-[10px] font-medium leading-tight italic">Immediate restock required.</p>
-            </div>
-
-            <div className="bg-white p-6 rounded-2xl shadow-[0px_24px_48px_rgba(0,0,0,0.04)] border-l-4 border-blue-600 hover:-translate-y-1 transition-all duration-300">
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-blue-500/10 rounded-xl">
-                  <span className="material-symbols-outlined text-blue-600">sync_alt</span>
-                </div>
-                <span className="text-[10px] font-bold bg-blue-600 text-white px-2 py-1 rounded-full tracking-widest uppercase">Requests</span>
-              </div>
-              <p className="text-[#595c5e] text-sm font-medium mb-1">Pending Branch Orders</p>
-              <h3 className="text-3xl font-black tracking-tighter">
-                {pendingRequests.length} <span className="text-sm font-medium text-[#595c5e]">Queued</span>
-              </h3>
-              <div className="mt-4 flex items-center gap-2">
-                <button
-                  onClick={() => setShowNotifications(true)}
-                  className="text-blue-600 text-[10px] font-black uppercase tracking-widest hover:underline"
-                >
-                  Process Now &rsaquo;
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-[#0c0f10] p-6 rounded-2xl flex flex-col justify-between overflow-hidden relative group hover:shadow-2xl transition-all duration-300">
-              <div className="relative z-10">
-                <h4 className="text-[#c5fe3c] text-lg font-black tracking-tight mb-1">Smart Logistics</h4>
-                <p className="text-gray-400 text-[11px] font-medium leading-relaxed">Inter-branch routing active for regional logistics pipeline.</p>
-              </div>
-              <button className="relative z-10 text-[#c5fe3c] font-bold text-xs flex items-center gap-2 group-hover:gap-3 transition-all mt-4">
-                Manage Matrix <span className="material-symbols-outlined text-sm">arrow_forward</span>
-              </button>
-              <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                <span className="material-symbols-outlined text-[100px] text-[#c5fe3c]">sync_alt</span>
-              </div>
             </div>
           </div>
 
@@ -646,6 +572,18 @@ export default function WarehouseInventory() {
                       <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-[#abadaf] pointer-events-none">expand_more</span>
                     </div>
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#496400] px-1 opacity-80">Price Per Unit</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formPricePerUnit || ""}
+                    onChange={(e) => setFormPricePerUnit(Number(e.target.value))}
+                    className="w-full bg-[#eff1f3] px-6 py-5 rounded-2xl font-black text-xl text-[#0c0f10] border-none focus:ring-4 focus:ring-[#c5fe3c]/50 transition-all outline-none shadow-inner"
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-6">

@@ -10,29 +10,42 @@ interface DashboardData {
   warehouseName: string;
   totalProducts: number;
   warehouseStock: number;
-  /** Sum of stock units across all branches (matches warehouse inventory KPI). */
   totalBranchInventoryUnits: number;
+  totalInventoryUnits: number;
+  estimatedInventoryCost: number;
+  warehouseInventoryCost?: number;
+  branchInventoryCost?: number;
   inventoryCount: number;
   outOfStockCount: number;
   lowStockCount: number;
   expiringCount: number;
   totalBranches: number;
+  totalUsers: number;
   foodWastage: number;
   totalProfit: number;
+  todayProfit: number;
   profitGrowth: number;
   overallPercentage: number;
   recentActivity: any[];
   stockLevels: any[];
   orderSummary: any[];
   profitByCategory: any[];
+  recentOrders?: any[];
+  lowStockItems?: any[];
 }
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<number | string>("");
+  const [selectedBranchName, setSelectedBranchName] = useState("All Branches");
   const [loading, setLoading] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [userName, setUserName] = useState("Premalatha");
+  const [chartPeriod, setChartPeriod] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [actioningId, setActioningId] = useState<number | null>(null);
 
   useEffect(() => {
     const userStr = localStorage.getItem("user");
@@ -42,27 +55,41 @@ export default function Dashboard() {
     }
 
     const user = JSON.parse(userStr);
+    setUserName(user.name || "Premalatha");
+
     if (!user.auth) {
       navigate("/");
       return;
     }
 
+    const fetchBranches = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/branches/my`, {
+          headers: { 'Authorization': getAuthHeader(user) }
+        });
+        if (res.ok) {
+          const rows = await res.json();
+          setBranches(Array.isArray(rows) ? rows : []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch branches", err);
+      }
+    };
+
     const fetchStats = async () => {
       try {
-        const res = await fetch(`${API_BASE}/dashboard/stats`, {
+        const url = selectedBranchId
+          ? `${API_BASE}/dashboard/stats?branchId=${selectedBranchId}&period=${chartPeriod}`
+          : `${API_BASE}/dashboard/stats?period=${chartPeriod}`;
+
+        const res = await fetch(url, {
           headers: {
             'Authorization': getAuthHeader(user)
           }
         });
         if (res.ok) {
           const stats = await res.json();
-          if (stats.error) {
-            console.error("Backend Stats Error:", stats.error, stats.type);
-          } else {
-            setData(stats);
-          }
-        } else {
-          console.error("Dashboard HTTP Error:", res.status);
+          setData(stats);
         }
       } catch (err) {
         console.error("Failed to fetch dashboard stats", err);
@@ -73,7 +100,10 @@ export default function Dashboard() {
 
     const fetchPendingRequests = async () => {
       try {
-        const res = await fetch(`${API_BASE}/stock-requests/pending`, {
+        const url = selectedBranchId
+          ? `${API_BASE}/stock-requests/pending?branchId=${selectedBranchId}`
+          : `${API_BASE}/stock-requests/pending`;
+        const res = await fetch(url, {
           headers: { 'Authorization': getAuthHeader(user) }
         });
         if (res.ok) setPendingRequests(await res.json());
@@ -82,357 +112,579 @@ export default function Dashboard() {
       }
     };
 
+    fetchBranches();
     fetchStats();
     fetchPendingRequests();
 
-    // Auto-refresh notifications every 30 seconds
     const interval = setInterval(fetchPendingRequests, 30000);
     return () => clearInterval(interval);
-  }, [navigate]);
+  }, [navigate, selectedBranchId, chartPeriod]);
 
-  const handleApproveRequest = async (id: number) => {
-    const userStr = localStorage.getItem("user");
-    if (!userStr) return;
-    const user = JSON.parse(userStr);
-
+  const handleApprove = async (id: number) => {
+    setActioningId(id);
     try {
-      const res = await fetch(`${API_BASE}/stock-requests/${id}/approve`, {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      await fetch(`${API_BASE}/stock-requests/${id}/approve`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": getAuthHeader(user)
-        },
-        body: JSON.stringify({ remark: "Approved by Owner" })
+        headers: { "Content-Type": "application/json", Authorization: getAuthHeader(user) },
+        body: JSON.stringify({}),
       });
-      if (res.ok) {
-        setPendingRequests(prev => prev.filter(r => r.id !== id));
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        alert(errData.error || "Failed to approve request. Stock might be insufficient.");
-      }
-    } catch (err) {
-      console.error(err);
-    }
+      setPendingRequests(prev => prev.filter(r => r.id !== id));
+    } catch (err) { console.error(err); }
+    finally { setActioningId(null); }
+  };
+
+  const handleReject = async (id: number) => {
+    setActioningId(id);
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      await fetch(`${API_BASE}/stock-requests/${id}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: getAuthHeader(user) },
+        body: JSON.stringify({}),
+      });
+      setPendingRequests(prev => prev.filter(r => r.id !== id));
+    } catch (err) { console.error(err); }
+    finally { setActioningId(null); }
   };
 
   if (loading) {
     return (
-      <div className="bg-background text-on-surface min-h-screen flex items-center justify-center">
-        <p className="text-xl font-bold animate-pulse">Synchronizing Workspace...</p>
+      <div className="bg-[#f5f6f8] text-[#2c2f31] min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-[#C6FF3D] border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm font-bold tracking-widest uppercase opacity-50">Enterprise Syncing...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-background text-on-surface min-h-screen flex">
+    <div className="bg-[#f5f6f8] text-[#2c2f31] min-h-screen flex">
       <Sidebar />
 
-      {/* Main Content Area */}
-      <main className="ml-56 flex-1 min-h-screen bg-background">
+      <main className="ml-64 flex-1 min-h-screen relative">
         <Header
           title="Dashboard"
-          subtitle="Operational Intelligence"
-          searchPlaceholder="Search resources..."
-          icon="dashboard"
+          subtitle="Enterprise Overview"
         >
-          <div className="flex items-center gap-6">
-            {/* Notification Hub */}
-            <div className="relative">
-              <button
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="relative p-2.5 bg-white border border-[#abadaf]/10 rounded-xl hover:bg-[#eff1f3] transition-colors"
-              >
-                <span className="material-symbols-outlined text-[#0c0f10] text-[22px]">notifications</span>
-                {pendingRequests.length > 0 && (
-                  <span className="absolute -top-1 -right-1 h-5 w-5 bg-error text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white animate-pulse">
-                    {pendingRequests.length}
-                  </span>
-                )}
-              </button>
-
-              {/* Notification Popover */}
-              {showNotifications && (
-                <div className="absolute right-0 mt-4 w-[320px] bg-white rounded-2xl shadow-2xl border border-black/5 z-[50] overflow-hidden">
-                  <div className="p-4 bg-[#f5f6f8] border-b border-black/5 flex justify-between items-center">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#0c0f10]">Pending Actions</p>
-                    <span className="text-[10px] font-bold text-error">{pendingRequests.length} Requests</span>
-                  </div>
-                  <div className="max-h-[350px] overflow-y-auto no-scrollbar">
-                    {pendingRequests.length === 0 ? (
-                      <div className="p-10 text-center">
-                        <span className="material-symbols-outlined text-[40px] text-[#abadaf] opacity-20 block mb-2">check_circle</span>
-                        <p className="text-xs font-bold text-[#abadaf]">Logistics clear</p>
-                      </div>
-                    ) : (
-                      pendingRequests.map((req) => (
-                        <div key={req.id} className="p-4 border-b border-black/5 hover:bg-[#eff1f3]/50 transition-colors">
-                          <div className="flex justify-between items-start mb-1">
-                            <p className="text-sm font-black text-[#0c0f10] uppercase tracking-tighter">{req.ingredientName}</p>
-                            <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">New</span>
-                          </div>
-                          <p className="text-[10px] font-bold text-[#595c5e]">
-                            Branch: <span className="text-[#0c0f10]">#{req.branchId}</span> •
-                            Qty: <span className="text-[#0c0f10]">{req.requiredQuantity} {req.unit}</span>
-                          </p>
-                          <div className="mt-3">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleApproveRequest(req.id);
-                              }}
-                              className="w-full py-1.5 bg-black text-[#c5fe3c] text-[9px] font-black uppercase tracking-widest rounded-lg hover:scale-105 transition-all shadow-md flex items-center justify-center gap-1"
-                            >
-                              <span className="material-symbols-outlined text-xs">local_shipping</span>
-                              Dispatch now
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
+          {/* Notification Bell — Stock Requests */}
+          <div className="relative">
+            <button
+              onClick={() => setShowNotifications(v => !v)}
+              className="p-2 text-slate-500 hover:bg-slate-200/50 rounded-lg transition-colors relative"
+            >
+              <span className="material-symbols-outlined">notifications</span>
+              {pendingRequests.length > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full border-2 border-slate-50 animate-pulse" />
               )}
-            </div>
+            </button>
 
-            <div className="h-10 w-px bg-black/5 hidden md:block"></div>
+            {showNotifications && (
+              <div className="absolute right-0 mt-3 w-[380px] bg-white rounded-2xl shadow-2xl border border-black/5 z-[200] overflow-hidden">
+                {/* Panel header */}
+                <div className="px-5 py-4 bg-slate-950 flex justify-between items-center">
+                  <div>
+                    <p className="text-white font-black text-sm tracking-tight">Stock Requests</p>
+                    <p className="text-white/40 text-[10px] mt-0.5">{pendingRequests.length} pending approval</p>
+                  </div>
+                  <button
+                    onClick={() => setShowNotifications(false)}
+                    className="text-white/40 hover:text-white transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-sm">close</span>
+                  </button>
+                </div>
+
+                {/* Request list */}
+                <div className="max-h-[420px] overflow-y-auto divide-y divide-black/5">
+                  {pendingRequests.length === 0 ? (
+                    <div className="py-12 flex flex-col items-center text-slate-400">
+                      <span className="material-symbols-outlined text-4xl mb-2">check_circle</span>
+                      <p className="text-xs font-bold">No pending requests</p>
+                    </div>
+                  ) : (
+                    pendingRequests.map((req: any) => (
+                      <div key={req.id} className="px-5 py-4 hover:bg-slate-50 transition-colors">
+                        {/* Top row */}
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-black text-sm text-slate-900 capitalize truncate">
+                              {req.ingredientName}
+                            </p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="material-symbols-outlined text-[12px] text-slate-400">store</span>
+                              <span className="text-[11px] text-slate-500 font-medium">
+                                {req.branch?.name || `Branch #${req.branchId}`}
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-black bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full uppercase tracking-widest shrink-0">
+                            Pending
+                          </span>
+                        </div>
+
+                        {/* Details row */}
+                        <div className="flex items-center gap-4 mb-3 text-[11px] text-slate-500 font-medium">
+                          <span className="flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[12px]">inventory_2</span>
+                            {req.quantity} {req.unit}
+                          </span>
+                          {req.requestedBy?.name && (
+                            <span className="flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[12px]">person</span>
+                              {req.requestedBy.name}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleApprove(req.id)}
+                            disabled={actioningId === req.id}
+                            className="flex-1 py-2 bg-[#C6FF3D] text-[#364b00] text-[10px] font-black rounded-lg uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1"
+                          >
+                            <span className="material-symbols-outlined text-sm">check</span>
+                            {actioningId === req.id ? "..." : "Approve"}
+                          </button>
+                          <button
+                            onClick={() => handleReject(req.id)}
+                            disabled={actioningId === req.id}
+                            className="flex-1 py-2 bg-slate-100 text-slate-600 text-[10px] font-black rounded-lg uppercase tracking-widest hover:bg-red-50 hover:text-red-600 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1"
+                          >
+                            <span className="material-symbols-outlined text-sm">close</span>
+                            {actioningId === req.id ? "..." : "Reject"}
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Footer */}
+                {pendingRequests.length > 0 && (
+                  <div className="px-5 py-3 border-t border-black/5 bg-slate-50 text-center">
+                    <p className="text-[10px] text-slate-400 font-medium">
+                      After approval, branch manager must confirm receipt to update inventory.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </Header>
 
-        {/* Dashboard Content */}
-        <div className="p-8 space-y-8">
-          {/* Stats Bento Grid - 4x2 Symmetric Layout */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Card 1 - Branches */}
-            <div className="bg-surface-container-lowest p-6 rounded-xl hover:-translate-y-1 hover:shadow-[0px_24px_48px_rgba(44,47,49,0.06)] transition-all duration-300">
+        {/* Content Canvas */}
+        <div className="pt-24 px-8 pb-12">
+          {/* Welcome Header */}
+          <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <h2 className="text-3xl font-bold tracking-tight text-on-surface">Welcome {userName}</h2>
+              <p className="text-on-surface-variant font-medium">
+                Enterprise Overview • {selectedBranchName === "All Branches" ? `Real-time across all ${data?.totalBranches || 0} branches` : `Viewing ${selectedBranchName}`}
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <select
+                value={selectedBranchId}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setSelectedBranchId(value);
+                  if (!value) {
+                    setSelectedBranchName("All Branches");
+                    return;
+                  }
+                  const branch = branches.find((b: any) => String(b.id) === value);
+                  setSelectedBranchName(branch?.name || "Selected Branch");
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 outline-none hover:border-primary transition-colors rounded-xl text-sm font-semibold shadow-sm focus:ring-2 focus:ring-primary/20 appearance-none min-w-[160px]"
+              >
+                <option value="">All Branches</option>
+                {branches.map(branch => (
+                  <option key={branch.id} value={branch.id}>{branch.name}</option>
+                ))}
+              </select>
+              {/*<button className="flex items-center gap-2 px-4 py-2.5 bg-surface-container-low hover:bg-surface-container-high transition-colors rounded-xl text-sm font-semibold">
+                <span className="material-symbols-outlined text-sm">calendar_today</span>
+                <span>This Month</span>
+                <span className="material-symbols-outlined text-sm">expand_more</span>
+              </button>*/}
+
+            </div>
+          </div>
+
+          {/* Bento Grid KPI Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+            {/* Revenue Today */}
+            <div className="bg-white p-6 rounded-xl hover:shadow-2xl hover:shadow-black/5 hover:-translate-y-1 transition-all duration-300 group">
               <div className="flex justify-between items-start mb-4">
-                <div className="p-2 bg-surface-container-low rounded-lg">
-                  <span className="material-symbols-outlined text-primary">storefront</span>
+                <div className="p-3 bg-primary/10 rounded-xl group-hover:bg-primary-container transition-colors">
+                  <span className="material-symbols-outlined text-primary">payments</span>
+                </div>
+                <span className="text-xs font-bold bg-primary-container text-on-primary-container px-2 py-1 rounded-full">+{data?.profitGrowth || 0}%</span>
+              </div>
+              <p className="text-on-surface-variant text-sm font-medium">Daily Revenue</p>
+              <h3 className="text-2xl font-bold mt-1 text-on-surface">₹{(data?.todayProfit || 0).toLocaleString()}</h3>
+            </div>
+
+            {/* Monthly Revenue */}
+            <div className="bg-white p-6 rounded-xl hover:shadow-2xl hover:shadow-black/5 hover:-translate-y-1 transition-all duration-300 group">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-secondary/10 rounded-xl group-hover:bg-secondary-container transition-colors">
+                  <span className="material-symbols-outlined text-secondary">trending_up</span>
+                </div>
+                <span className="text-xs font-bold bg-secondary-container text-on-secondary-container px-2 py-1 rounded-full">+{data?.profitGrowth || 0}%</span>
+              </div>
+              <p className="text-on-surface-variant text-sm font-medium">Monthly Revenue</p>
+              <h3 className="text-2xl font-bold mt-1 text-on-surface">₹{(data?.totalProfit || 0).toLocaleString()}</h3>
+            </div>
+
+            {/* Inventory Value */}
+            <div className="bg-white p-6 rounded-xl hover:shadow-2xl hover:shadow-black/5 hover:-translate-y-1 transition-all duration-300 group">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-tertiary/10 rounded-xl group-hover:bg-tertiary-container transition-colors">
+                  <span className="material-symbols-outlined text-tertiary">inventory_2</span>
+                </div>
+                <span className="text-xs font-medium text-on-surface-variant">{(data?.totalBranchInventoryUnits || 0).toLocaleString()} Units</span>
+              </div>
+              <p className="text-on-surface-variant text-sm font-medium">Branch Inventory Value</p>
+              <h3 className="text-2xl font-bold mt-1 text-on-surface">₹{(data?.branchInventoryCost || 0).toLocaleString()}</h3>
+            </div>
+
+
+            {/* Active Branches */}
+            <div className="bg-white p-6 rounded-xl hover:shadow-2xl hover:shadow-black/5 hover:-translate-y-1 transition-all duration-300 group">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-outline/10 rounded-xl group-hover:bg-surface-container-high transition-colors">
+                  <span className="material-symbols-outlined text-on-surface">store</span>
+                </div>
+                <div className="flex -space-x-2">
+                  <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-[8px] font-bold">CH</div>
+                  <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-300 flex items-center justify-center text-[8px] font-bold">CO</div>
+                  <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-400 flex items-center justify-center text-[8px] font-bold">MA</div>
                 </div>
               </div>
               <p className="text-on-surface-variant text-sm font-medium">Active Branches</p>
-              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">{data?.totalBranches || "0"}</h2>
+              <h3 className="text-2xl font-bold mt-1 text-on-surface">
+                {(data?.totalBranches || 0).toString().padStart(2, '0')}
+                <span className="text-sm font-medium text-slate-400"> / {Math.max(branches.length, 1).toString().padStart(2, '0')}</span>
+              </h3>
             </div>
 
-            {/* Card 2 - Branch network total + central warehouse context */}
-            <div className="bg-surface-container-lowest p-6 rounded-xl hover:-translate-y-1 hover:shadow-[0px_24px_48px_rgba(44,47,49,0.06)] transition-all duration-300">
-              <div className="flex justify-between items-center mb-4">
-                <div className="p-2 bg-surface-container-low rounded-lg">
-                  <span className="material-symbols-outlined text-primary">inventory_2</span>
-                </div>
-                <div className="flex items-center gap-1 bg-primary-container/20 px-2 py-1 rounded-full">
-                  <span className="text-[10px] font-bold text-on-primary-container uppercase tracking-tighter">BRANCH STOCK</span>
-                </div>
-              </div>
-              <p className="text-on-surface-variant text-sm font-medium">Total units (all branches)</p>
-              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">
-                {Math.round(data?.totalBranchInventoryUnits ?? 0).toLocaleString()}{" "}
-                <span className="text-sm font-medium text-on-surface-variant italic">units</span>
-              </h2>
-              <p className="text-on-surface-variant text-xs font-medium mt-3 leading-snug">
-                Central warehouse ({data?.warehouseName || "Main"}):{" "}
-                <span className="text-on-surface font-bold">
-                  {Math.round(data?.warehouseStock ?? 0).toLocaleString()} units
-                </span>
-              </p>
-            </div>
-
-            {/* Card 3 - Replaced with Pending Request */}
-            <div className="bg-surface-container-lowest p-6 rounded-xl hover:-translate-y-1 hover:shadow-[0px_24px_48px_rgba(44,47,49,0.06)] transition-all duration-300 border-l-4 border-primary">
+            {/* Low Stock - Critical Alert */}
+            <div className="bg-error-container/10 p-6 rounded-xl hover:shadow-2xl hover:shadow-black/5 hover:-translate-y-1 transition-all duration-300 group border border-error/5">
               <div className="flex justify-between items-start mb-4">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <span className="material-symbols-outlined text-primary">sync_alt</span>
+                <div className="p-3 bg-error/10 rounded-xl group-hover:bg-error group-hover:text-white transition-colors">
+                  <span className="material-symbols-outlined text-error group-hover:text-white">warning</span>
+                </div>
+                <span className="text-xs font-bold text-error">CRITICAL</span>
+              </div>
+              <p className="text-on-surface-variant text-sm font-medium">Low Stock Alerts</p>
+              <h3 className="text-2xl font-bold mt-1 text-error">{data?.lowStockCount || 0} Items</h3>
+            </div>
+
+            {/* Expiring Soon - Warning Alert */}
+            <div className="bg-tertiary-container/10 p-6 rounded-xl hover:shadow-2xl hover:shadow-black/5 hover:-translate-y-1 transition-all duration-300 group border border-tertiary/5">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-tertiary/10 rounded-xl group-hover:bg-tertiary transition-colors">
+                  <span className="material-symbols-outlined text-tertiary group-hover:text-on-tertiary-fixed">event_busy</span>
+                </div>
+                <span className="text-xs font-bold text-tertiary">WARNING</span>
+              </div>
+              <p className="text-on-surface-variant text-sm font-medium">Expiring Soon</p>
+              <h3 className="text-2xl font-bold mt-1 text-tertiary">{data?.expiringCount || 0} Items</h3>
+            </div>
+
+            {/* Pending Requests */}
+            <div className="bg-white p-6 rounded-xl hover:shadow-2xl hover:shadow-black/5 hover:-translate-y-1 transition-all duration-300 group border-l-4 border-primary">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-primary/10 rounded-xl group-hover:bg-primary-container transition-colors">
+                  <span className="material-symbols-outlined text-primary">swap_horiz</span>
                 </div>
               </div>
               <p className="text-on-surface-variant text-sm font-medium">Pending Requests</p>
-              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">{pendingRequests.length}</h2>
-              <div className="mt-4 flex items-center gap-1">
-                <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Branch Stock Requests</span>
-              </div>
+              <h3 className="text-2xl font-bold mt-1 text-on-surface">{pendingRequests.length.toString().padStart(2, '0')} Raised</h3>
             </div>
 
-            {/* Card 4 - Expired Product Count */}
-            <div className="bg-surface-container-lowest p-6 rounded-xl hover:-translate-y-1 hover:shadow-[0px_24px_48px_rgba(44,47,49,0.06)] transition-all duration-300">
+            {/* User Management Summary */}
+            <div className="bg-white p-6 rounded-xl hover:shadow-2xl hover:shadow-black/5 hover:-translate-y-1 transition-all duration-300 group">
               <div className="flex justify-between items-start mb-4">
-                <div className="p-2 bg-surface-container-low rounded-lg">
-                  <span className="material-symbols-outlined text-error">warning</span>
+                <div className="p-3 bg-secondary/10 rounded-xl group-hover:bg-secondary-container transition-colors">
+                  <span className="material-symbols-outlined text-secondary">person_pin</span>
                 </div>
-                <div className="flex items-center gap-1 bg-error-container/20 px-2 py-1 rounded-full">
-                  <span
-                    className="material-symbols-outlined text-[12px] text-error"
-                    style={{ fontVariationSettings: "'FILL' 1" }}
-                  >
-                    trending_up
-                  </span>
-                  <span className="text-[10px] font-bold text-on-error-container">+4.2%</span>
+                <div className="text-[10px] text-right font-medium text-slate-400">
+                  <p>3 Mgrs</p>
+                  <p>12 Staff</p>
                 </div>
               </div>
-              <p className="text-on-surface-variant text-sm font-medium">Out of Stock Batches</p>
-              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">{data?.outOfStockCount.toLocaleString() || "0"}</h2>
-            </div>
-
-            {/* Card 4 - Replaced with Monthly Food Waste */}
-            <div className="bg-surface-container-lowest p-6 rounded-xl hover:-translate-y-1 hover:shadow-[0px_24px_48px_rgba(44,47,49,0.06)] transition-all duration-300">
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-2 bg-surface-container-low rounded-lg">
-                  <span className="material-symbols-outlined text-warning">warning</span>
-                </div>
-                <div className="flex items-center gap-1 bg-warning-container/20 px-2 py-1 rounded-full">
-                  <span className="text-[10px] font-bold text-on-warning-container">ACTION NEEDED</span>
-                </div>
-              </div>
-              <p className="text-on-surface-variant text-sm font-medium">Low Stock Batches</p>
-              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">{data?.lowStockCount.toLocaleString() || "0"}</h2>
-            </div>
-
-            <div className="bg-surface-container-lowest p-6 rounded-xl hover:-translate-y-1 hover:shadow-[0px_24px_48px_rgba(44,47,49,0.06)] transition-all duration-300">
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-2 bg-surface-container-low rounded-lg">
-                  <span className="material-symbols-outlined text-warning">timer</span>
-                </div>
-                <div className="flex items-center gap-1 bg-warning-container/20 px-2 py-1 rounded-full">
-                  <span className="text-[10px] font-bold text-on-warning-container uppercase">within 7 days</span>
-                </div>
-              </div>
-              <p className="text-on-surface-variant text-sm font-medium">Soon Expiring</p>
-              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">{data?.expiringCount || "0"}</h2>
-            </div>
-
-            {/* Card 8 - Total Recipes */}
-            <div className="bg-surface-container-lowest p-6 rounded-xl hover:-translate-y-1 hover:shadow-[0px_24px_48px_rgba(44,47,49,0.06)] transition-all duration-300">
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-2 bg-surface-container-low rounded-lg">
-                  <span className="material-symbols-outlined text-primary">inventory</span>
-                </div>
-              </div>
-              <p className="text-on-surface-variant text-sm font-medium">Products in Inventory</p>
-              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">{data?.totalProducts || "0"}</h2>
-            </div>
-
-            {/* Card 8 - Total Food Wastage */}
-            <div className="bg-surface-container-lowest p-6 rounded-xl hover:-translate-y-1 hover:shadow-[0px_24px_48px_rgba(44,47,49,0.06)] transition-all duration-300">
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-2 bg-surface-container-low rounded-lg">
-                  <span className="material-symbols-outlined text-error">delete_sweep</span>
-                </div>
-              </div>
-              <p className="text-on-surface-variant text-sm font-medium">Total Food Wastage</p>
-              <h2 className="text-3xl font-black text-on-surface tracking-tighter mt-1">{data?.foodWastage.toLocaleString() || "0"} <span className="text-sm font-medium text-on-surface-variant">units</span></h2>
+              <p className="text-on-surface-variant text-sm font-medium">Total Users</p>
+              <h3 className="text-2xl font-bold mt-1 text-on-surface">{data?.totalUsers || 0} Users</h3>
             </div>
           </div>
 
-          {/* Charts & Analytics */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Order Summary Line Chart Mockup */}
-            <div className="lg:col-span-2 bg-surface-container-lowest p-8 rounded-xl relative overflow-hidden group">
-              <div className="flex justify-between items-end mb-8">
+          {/* Analytics & Activity Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
+            {/* Revenue & Orders Trend */}
+            <div className="lg:col-span-2 bg-white rounded-2xl p-8 flex flex-col h-full shadow-sm">
+              <div className="flex justify-between items-center mb-8">
                 <div>
-                  <h3 className="text-xl font-bold tracking-tight text-on-surface">Order Summary</h3>
-                  <p className="text-on-surface-variant text-sm">Monthly throughput overview</p>
+                  <h4 className="text-lg font-bold text-on-surface">Enterprise Growth Trend</h4>
+                  <p className="text-on-surface-variant text-xs">Consolidated orders and revenue performance</p>
                 </div>
-                <div className="flex gap-2">
-                  <span className="px-3 py-1 bg-surface-container-low text-xs font-bold rounded-full cursor-pointer hover:bg-primary-container transition-colors">W</span>
-                  <span className="px-3 py-1 bg-primary-container text-xs font-bold rounded-full cursor-pointer">M</span>
-                  <span className="px-3 py-1 bg-surface-container-low text-xs font-bold rounded-full cursor-pointer hover:bg-primary-container transition-colors">Y</span>
+                <div className="flex bg-surface-container-low rounded-lg p-1">
+                  {(["daily", "weekly", "monthly"] as const).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setChartPeriod(p)}
+                      className={`px-3 py-1 text-xs font-bold rounded transition-all capitalize ${chartPeriod === p
+                        ? "bg-white shadow-sm text-primary"
+                        : "text-on-surface-variant hover:text-on-surface"
+                        }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
                 </div>
               </div>
-              {/* Chart Visualization (SVG CSS) */}
-              <div className="h-64 w-full mt-4 flex items-end justify-between px-2 gap-4">
-                {(data?.orderSummary || []).map((item, idx) => (
-                  <div className="w-full bg-surface-container-low rounded-t-xl transition-all duration-700 relative" style={{ height: `${(item.value / 100) * 100}%` }} key={idx}>
-                    <div className="absolute inset-x-0 bottom-0 neon-gradient h-1/2 opacity-20 rounded-t-xl" />
+              <div className="flex-1 relative min-h-[300px] flex flex-col justify-end">
+                <div className="flex items-end justify-between h-full gap-2 px-4">
+                  <div className="w-full flex items-end gap-2 h-48">
+                    {(() => {
+                      const summary = data?.orderSummary || [];
+                      const maxVal = Math.max(...summary.map((s: any) => s.value || 0), 1);
+                      return summary.map((item: any, idx: number) => {
+                        const heightPct = Math.max((item.value / maxVal) * 100, 4);
+                        const sharePct = Math.round((item.value / maxVal) * 100);
+                        return (
+                          <div
+                            key={idx}
+                            className="flex-1 relative group/bar flex flex-col justify-end"
+                            style={{ height: '100%' }}
+                          >
+                            {/* Tooltip */}
+                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-20
+                                            opacity-0 group-hover/bar:opacity-100 pointer-events-none
+                                            transition-opacity duration-200 whitespace-nowrap">
+                              <div className="bg-slate-900 text-white text-[10px] font-black px-2.5 py-1.5 rounded-lg shadow-xl flex flex-col items-center gap-0.5">
+                                <span className="text-[#C6FF3D]">{sharePct}%</span>
+                                <span className="text-white/60">{item.value} orders</span>
+                              </div>
+                              {/* Arrow */}
+                              <div className="w-2 h-2 bg-slate-900 rotate-45 mx-auto -mt-1 rounded-sm" />
+                            </div>
+                            {/* Bar */}
+                            <div
+                              className={`w-full rounded-t-md transition-all duration-700 cursor-pointer
+                                          ${idx % 3 === 0 ? 'bg-primary group-hover/bar:bg-primary/80' : 'bg-primary-container group-hover/bar:bg-primary/60'}`}
+                              style={{ height: `${heightPct}%` }}
+                            />
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
-                ))}
-              </div>
-              <div className="flex justify-between mt-4 px-2 text-[10px] font-bold text-on-surface-variant tracking-widest uppercase">
-                {(data?.orderSummary || []).map((item, idx) => <span key={idx}>{item.day}</span>)}
+                </div>
+                <div className="flex justify-between mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4">
+                  {data?.orderSummary?.map((s: any) => <span key={s.day}>{s.day}</span>)}
+                </div>
               </div>
             </div>
 
-            {/* Profit by Category Donut Chart */}
-            <div className="bg-surface-container-lowest p-8 rounded-xl flex flex-col items-center justify-center">
-              <h3 className="text-xl font-bold tracking-tight text-on-surface mb-2 self-start">Profit by Category</h3>
-              <p className="text-on-surface-variant text-sm mb-8 self-start">Total: ₹{data?.totalProfit.toLocaleString() || "0"} this period</p>
-              <div className="relative w-48 h-48 flex items-center justify-center">
-                <svg className="w-full h-full transform -rotate-90">
-                  <circle className="text-surface-container-low" cx="96" cy="96" fill="transparent" r="80" stroke="currentColor" strokeWidth="20" />
-                  <circle className="text-primary" cx="96" cy="96" fill="transparent" r="80" stroke="currentColor" strokeDasharray="502" strokeDashoffset="150" strokeWidth="20" />
-                  <circle className="text-on-surface" cx="96" cy="96" fill="transparent" r="80" stroke="currentColor" strokeDasharray="502" strokeDashoffset="400" strokeWidth="20" />
-                </svg>
-                <div className="absolute flex flex-col items-center">
-                  <span className="text-2xl font-black tracking-tighter">{data?.overallPercentage || "0"}%</span>
-                  <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Growth</span>
-                </div>
-              </div>
-              <div className="w-full mt-8 space-y-3">
-                {(data?.profitByCategory || []).map((item, idx) => (
-                  <div className="flex justify-between items-center" key={idx}>
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${item.color === 'primary' ? 'bg-primary' : item.color === 'on-surface' ? 'bg-on-surface' : 'bg-surface-dim'}`} />
-                      <span className="text-xs font-medium">{item.name}</span>
-                    </div>
-                    <span className="text-xs font-bold">{item.percent}%</span>
+            {/* Profit by Category */}
+            <div className="bg-white rounded-2xl p-8 flex flex-col shadow-sm">
+              <h4 className="text-lg font-bold text-on-surface mb-1">Profit by Category</h4>
+              <p className="text-on-surface-variant text-xs mb-8">Performance breakdown this month</p>
+              <div className="flex-1 flex flex-col justify-center items-center relative">
+                <div className="w-48 h-48 rounded-full border-[20px] border-primary-container flex items-center justify-center relative">
+                  <div className="absolute inset-0 border-[20px] border-primary border-r-transparent border-b-transparent border-l-transparent -rotate-45"></div>
+                  <div className="text-center">
+                    <span className="text-3xl font-extrabold text-on-surface">{data?.overallPercentage || 64}%</span>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Avg Margin</p>
                   </div>
-                ))}
+                </div>
+                <div className="w-full mt-8 space-y-3">
+                  {(data?.profitByCategory || []).map((item, idx) => (
+                    <div className="flex justify-between items-center" key={idx}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${item.color === 'primary' ? 'bg-primary' : 'bg-primary-container'}`}></div>
+                        <span className="text-xs font-semibold">{item.name}</span>
+                      </div>
+                      <span className="text-xs font-bold">{item.percent}%</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Bottom Section: Stock Levels & Activity & Requests */}
+          {/* Critical Alerts & Live Activity Feed */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Stock Levels Progress Bars */}
-            <div className="bg-surface-container-lowest p-8 rounded-xl">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold tracking-tight text-on-surface">Critical Stock Levels</h3>
-                <button className="text-xs font-bold text-primary hover:underline">View All Inventory</button>
+            {/* Low Stock Alert Table */}
+            <div className="lg:col-span-2 bg-white rounded-2xl overflow-hidden shadow-sm">
+              <div className="p-6 border-b border-surface-container-low flex justify-between items-center">
+                <div>
+                  <h4 className="text-lg font-bold text-on-surface">Low Stock Alerts</h4>
+                  <p className="text-xs text-on-surface-variant mt-0.5">Warehouse &amp; all branches</p>
+                </div>
+                <button
+                  onClick={() => navigate("/warehouse-inventory")}
+                  className="text-xs font-bold text-primary hover:underline"
+                >
+                  View Warehouse
+                </button>
               </div>
-              <div className="space-y-6">
-                {(data?.stockLevels && data.stockLevels.length > 0) ? data.stockLevels.map((item, idx) => (
-                  <div className="group" key={idx}>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="font-medium text-on-surface">{item.name}</span>
-                      <span className="font-bold text-error">{item.left} left</span>
-                    </div>
-                    <div className="w-full bg-surface-container-low h-2 rounded-full overflow-hidden">
-                      <div className="bg-error h-full transition-all duration-1000" style={{ width: `${(item.left / (item.total || 100)) * 100}%` }} />
-                    </div>
-                  </div>
-                )) : (
-                  <p className="text-on-surface-variant text-sm">No critical stock alerts.</p>
-                )}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-surface-container-low">
+                    <tr>
+                      <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ingredient</th>
+                      <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Source</th>
+                      <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Qty / Threshold</th>
+                      <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-surface-container-low">
+                    {data?.lowStockItems?.length ? data.lowStockItems.map((item: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full shrink-0 ${item.status === 'EXPIRED' ? 'bg-error' : 'bg-amber-400'}`} />
+                            <p className="text-sm font-semibold capitalize">{item.ingredientName}</p>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-sm text-slate-400">
+                              {item.source === 'Warehouse' ? 'warehouse' : 'store'}
+                            </span>
+                            <span className="text-xs font-medium text-slate-600">{item.sourceName}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-bold ${item.status === 'EXPIRED' ? 'text-error' : 'text-amber-600'}`}>
+                              {item.quantity} {item.unit}
+                            </span>
+                            <span className="text-[10px] text-slate-400">/ {item.threshold} {item.unit}</span>
+                          </div>
+                          {/* mini progress bar */}
+                          <div className="mt-1.5 w-24 h-1 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${item.status === 'EXPIRED' ? 'bg-error' : 'bg-amber-400'}`}
+                              style={{ width: `${Math.min((item.quantity / Math.max(item.threshold, 1)) * 100, 100)}%` }}
+                            />
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-widest ${item.status === 'EXPIRED'
+                            ? 'bg-error/10 text-error'
+                            : 'bg-amber-100 text-amber-700'
+                            }`}>
+                            {item.status}
+                          </span>
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-10 text-center text-on-surface-variant text-sm">
+                          <span className="material-symbols-outlined text-3xl block mb-2 text-slate-300">check_circle</span>
+                          All stock levels are healthy.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
 
-            
+            {/* Activity Feed */}
+            <div className="bg-slate-900 text-white rounded-2xl p-8 flex flex-col shadow-xl">
+              <h4 className="text-lg font-bold mb-6">Live Enterprise Feed</h4>
+              <div className="flex-1 space-y-6 relative">
+                <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-white/10"></div>
 
-            {/* Recent Activity */}
-            <div className="bg-surface-container-lowest p-8 rounded-xl">
-              <h3 className="text-xl font-bold tracking-tight text-on-surface mb-6">Live Operations</h3>
-              <div className="space-y-6">
-                {(data?.recentActivity && data.recentActivity.length > 0) ? data.recentActivity.map((log, idx) => (
-                  <div className="flex items-center gap-4" key={idx}>
-                    <div className="w-10 h-10 rounded-full overflow-hidden bg-primary-container flex items-center justify-center">
-                      <span className="material-symbols-outlined text-primary">history</span>
+                {data?.recentActivity?.length ? data.recentActivity.map((log, idx) => (
+                  <div key={idx} className="relative flex gap-4">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center z-10 shrink-0 ${log.action.includes("Stock") ? "bg-[#C6FF3D]" :
+                      log.action.includes("Order") ? "bg-error" :
+                        log.action.includes("Request") ? "bg-blue-500" : "bg-primary"
+                      }`}>
+                      <span className="material-symbols-outlined text-[14px] text-black font-bold">
+                        {log.action.includes("Stock") ? "add" :
+                          log.action.includes("Order") ? "remove" :
+                            log.action.includes("Request") ? "swap_horiz" : "history"}
+                      </span>
                     </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-on-surface"><span className="font-bold">{log.action}</span>: {log.details}</p>
-                      <p className="text-[10px] text-on-surface-variant font-bold tracking-widest uppercase">
-                        {new Date(log.timestamp).toLocaleTimeString()}
-                      </p>
+                    <div>
+                      <p className="text-sm font-semibold text-white/90">{log.action}</p>
+                      <p className="text-xs text-white/50 leading-relaxed">{log.details}</p>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase mt-1 inline-block">
+                        {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
                     </div>
                   </div>
                 )) : (
-                  <p className="text-on-surface-variant text-sm">No recent activity.</p>
+                  <div className="text-center py-10">
+                    <p className="text-white/30 text-xs">Awaiting fresh signal...</p>
+                  </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Quick Actions Section */}
+          <div className="mt-10 bg-white/40 border border-white/60 p-6 rounded-2xl flex flex-wrap gap-4 items-center justify-between">
+            <p className="text-sm font-bold text-on-surface-variant uppercase tracking-widest">Enterprise Quick Actions</p>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => navigate("/product")}
+                className="flex items-center gap-2 px-4 py-2 bg-white text-on-surface text-sm font-bold rounded-xl shadow-sm hover:shadow-md transition-shadow"
+              >
+                <span className="material-symbols-outlined text-sm">add_box</span>
+                <span>Add Product</span>
+              </button>
+              <button
+                onClick={() => navigate("/branches")}
+                className="flex items-center gap-2 px-4 py-2 bg-white text-on-surface text-sm font-bold rounded-xl shadow-sm hover:shadow-md transition-shadow"
+              >
+                <span className="material-symbols-outlined text-sm">add_business</span>
+                <span>Add Branch</span>
+              </button>
+              <button className="flex items-center gap-2 px-4 py-2 bg-white text-on-surface text-sm font-bold rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                <span className="material-symbols-outlined text-sm">person_add_alt</span>
+                <span>Add Manager</span>
+              </button>
+              <button
+                onClick={() => navigate("/warehouse-orders")}
+                className="flex items-center gap-2 px-4 py-2 bg-white text-on-surface text-sm font-bold rounded-xl shadow-sm hover:shadow-md transition-shadow"
+              >
+                <span className="material-symbols-outlined text-sm">post_add</span>
+                <span>Create Order</span>
+              </button>
             </div>
           </div>
         </div>
       </main>
 
-      {/* FAB for Dashboard context */}
-      <div className="fixed bottom-8 right-8 z-50">
-        <button className="neon-gradient-btn w-14 h-14 rounded-full flex items-center justify-center shadow-xl hover:scale-110 transition-transform active:scale-95 group">
-          <span className="material-symbols-outlined text-[#364b00] group-hover:rotate-90 transition-transform duration-300">add</span>
+      {/* Floating Action Button */}
+      <div className="fixed bottom-8 right-8 z-50 flex flex-col items-end gap-3 group">
+        <div className="flex flex-col gap-3 mb-2 translate-y-10 opacity-0 pointer-events-none group-hover:translate-y-0 group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-300">
+          <button className="bg-white text-on-surface px-4 py-2 rounded-xl shadow-2xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50">
+            <span className="material-symbols-outlined text-sm">local_shipping</span>
+            Add Supplier
+          </button>
+          <button className="bg-white text-on-surface px-4 py-2 rounded-xl shadow-2xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50" onClick={() => navigate("/warehouse-orders")}>
+            <span className="material-symbols-outlined text-sm">shopping_cart_checkout</span>
+            Create Order
+          </button>
+          <button className="bg-white text-on-surface px-4 py-2 rounded-xl shadow-2xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50" onClick={() => navigate("/product")}>
+            <span className="material-symbols-outlined text-sm">inventory</span>
+            Add Product
+          </button>
+        </div>
+        <button className="w-14 h-14 bg-slate-950 text-[#C6FF3D] rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all">
+          <span className="material-symbols-outlined text-3xl font-bold transition-transform group-hover:rotate-45">add</span>
         </button>
       </div>
     </div>

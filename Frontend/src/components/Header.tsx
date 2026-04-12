@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 
 interface HeaderProps {
     title: string;
@@ -10,68 +11,52 @@ interface HeaderProps {
     onSearchChange?: (val: string) => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ 
-    title, 
-    subtitle, 
-    searchPlaceholder = "Search...", 
-    icon = "folder_shared", 
+const Header: React.FC<HeaderProps> = ({
+    title,
+    subtitle,
+    searchPlaceholder = "Search enterprise vitals...",
+    icon = "search",
     children,
     searchValue,
     onSearchChange
 }) => {
-    // Get user from localStorage
+    const navigate = useNavigate();
     const userStr = localStorage.getItem("user");
     const user = userStr ? JSON.parse(userStr) : null;
-    const userName = user?.name || "Guest User";
-    
-    // Dynamic Role Mapping
-    const getDisplayRole = (role: string) => {
-        if (!role) return "Access Granted";
-        const r = role.toUpperCase();
-        if (r === "OWNER") return "Corporate Owner";
-        if (r === "MANAGER") return "Branch Manager";
-        if (r === "STAFF") return "Operations Staff";
-        return r.charAt(0) + r.slice(1).toLowerCase();
-    };
-
-    const userRole = getDisplayRole(user?.role);
-    const businessContext = user?.business?.name || user?.branch?.branchName || "Global Hub";
+    const businessContext = user?.business?.name || "All Branches";
+    const userName: string = user?.name || "U";
 
     return (
-        <header className="flex justify-between items-center px-10 py-6 w-full bg-[#f5f6f8]/90 backdrop-blur-xl sticky top-0 z-40 border-b border-black/5 shadow-sm">
-            <div className="flex items-center gap-10">
-                <div className="flex items-center gap-4">
-                    <span className="material-symbols-outlined text-[#abadaf] text-lg">{icon}</span>
-                    <div className="flex flex-col">
-                        <span className="text-[10px] font-black text-[#abadaf] uppercase tracking-[0.2em] leading-none mb-1">{subtitle} • {businessContext}</span>
-                        <h2 className="text-2xl font-black tracking-tight text-[#0c0f10] uppercase">{title}</h2>
-                    </div>
-                </div>
-                <div className="hidden md:flex items-center bg-[#eff1f3] px-4 py-2.5 rounded-full border border-black/5 w-72 focus-within:ring-2 focus-within:ring-[#c5fe3c] transition-all">
-                    <span className="material-symbols-outlined text-[#757779] text-sm mr-2">search</span>
-                    <input 
-                        className="bg-transparent border-none focus:ring-0 text-xs w-full outline-none font-medium" 
-                        placeholder={searchPlaceholder} 
+        <header className="fixed top-0 right-0 w-[calc(100%-16rem)] h-16 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl flex justify-between items-center px-8 z-40">
+            <div className="flex items-center gap-4 flex-1">
+                <div className="relative w-full max-w-md group">
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
+                    <input
+                        className="w-full bg-slate-200/30 border-none rounded-xl py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-[#C6FF3D]/50 transition-all outline-none"
+                        placeholder={searchPlaceholder}
                         type="text"
                         value={searchValue || ""}
                         onChange={(e) => onSearchChange?.(e.target.value)}
                     />
                 </div>
             </div>
-            
-            <div className="flex items-center gap-6">
-                {children}
-                <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
-                    <div className="text-right hidden sm:block">
-                        <p className="text-sm font-bold tracking-tight text-[#0c0f10]">{userName}</p>
-                        <p className="text-[10px] text-[#abadaf] uppercase tracking-widest leading-none">{userRole}</p>
-                    </div>
-                    <div className="w-10 h-10 rounded-xl overflow-hidden bg-[#c5fe3c] flex items-center justify-center ring-2 ring-white shadow-md">
-                        <div className="w-full h-full flex items-center justify-center text-black font-black text-lg bg-[#c5fe3c]">
-                            {userName.charAt(0).toUpperCase()}
-                        </div>
-                    </div>
+
+            <div className="flex items-center gap-4">
+                <div className="hidden lg:flex items-center gap-2 bg-white/50 px-3 py-1.5 rounded-lg text-sm font-medium text-[#496400]">
+                    <span className="material-symbols-outlined text-base">location_on</span>
+                    <span>Branch: {businessContext}</span>
+                    <span className="material-symbols-outlined text-base cursor-pointer">expand_more</span>
                 </div>
+
+                {children}
+
+                <button
+                    onClick={() => navigate("/profile")}
+                    className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-[#C6FF3D] font-bold text-sm border-2 border-[#C6FF3D]/30 hover:border-[#C6FF3D] transition-all hover:scale-105 shrink-0"
+                    title="Profile"
+                >
+                    {userName.charAt(0).toUpperCase()}
+                </button>
             </div>
         </header>
     );

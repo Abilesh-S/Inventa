@@ -3,13 +3,26 @@ import { Link, useNavigate } from "react-router-dom";
 
 const API_BASE = "http://localhost:8080/Inventa/api";
 
+type LoginStep = "login" | "forgot-email" | "forgot-otp" | "forgot-newpass";
+
 export default function Login() {
   const navigate = useNavigate();
+  const [loginStep, setLoginStep] = useState<LoginStep>("login");
+
+  // Login fields
   const [role, setRole] = useState("manager");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  // Forgot password fields
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotOtp, setForgotOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -58,6 +71,66 @@ export default function Login() {
     }
   };
 
+  const handleForgotSendOtp = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/email/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+      if (!res.ok) throw new Error(await res.text() || "Failed to send OTP");
+      setLoginStep("forgot-otp");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotVerifyOtp = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/email/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail, otp: forgotOtp }),
+      });
+      if (!res.ok) throw new Error(await res.text() || "Invalid OTP");
+      setLoginStep("forgot-newpass");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotResetPassword = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (newPassword !== confirmPassword) { setError("Passwords do not match"); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/email/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail, otp: forgotOtp, newPassword }),
+      });
+      if (!res.ok) throw new Error(await res.text() || "Failed to reset password");
+      setSuccessMsg("Password reset successfully! You can now login.");
+      setLoginStep("login");
+      setForgotEmail(""); setForgotOtp(""); setNewPassword(""); setConfirmPassword("");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="bg-surface text-on-surface selection:bg-primary-container selection:text-on-primary-fixed min-h-screen flex flex-col relative w-full overflow-x-hidden">
       {/* Top Navigation Anchor */}
@@ -70,20 +143,18 @@ export default function Login() {
         </div>
       </header>
 
-      {/* Main Content Canvas */}
       <main className="flex-grow flex items-center justify-center px-6 pb-12 z-10 relative">
         <div className="w-full max-w-[1200px] grid lg:grid-cols-2 gap-12 items-center">
-          {/* Branding/Editorial Column */}
+          {/* Branding Column */}
           <div className="hidden lg:block space-y-8">
             <div className="space-y-4">
               <span className="inline-flex px-3 py-1 rounded-full bg-primary-container text-on-primary-container text-xs font-bold tracking-widest uppercase">System 4.0</span>
               <h2 className="text-5xl font-medium tracking-tight text-on-surface leading-[1.1]">Inventory for the Modern Enterprise.</h2>
               <p className="text-on-surface-variant text-lg max-w-md">Precision analytics meets architectural design. Access your global vitals with a single secure entry.</p>
             </div>
-            {/* Stat Card (Kinetic Minimalist) */}
             <div className="p-8 rounded-xl surface-container-lowest long-tail-shadow max-w-sm relative overflow-hidden bg-white">
               <div className="absolute top-0 right-0 p-4 opacity-10">
-                <span className="material-symbols-outlined text-7xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>analytics</span>
+                <span className="material-symbols-outlined text-7xl">analytics</span>
               </div>
               <div className="relative z-10">
                 <p className="text-on-surface-variant text-sm font-medium mb-1">Global Throughput</p>
@@ -95,110 +166,144 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Login Card Container */}
+          {/* Card */}
           <div className="w-full max-w-md mx-auto lg:mx-0">
             <div className="surface-container-lowest p-10 rounded-xl long-tail-shadow bg-white">
-              <div className="mb-10">
-                <h3 className="text-2xl font-semibold text-on-surface mb-2">Welcome Back</h3>
-                <p className="text-on-surface-variant text-sm">Please enter your credentials to access the workspace.</p>
-              </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Role Selection */}
-                <div className="space-y-2">
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant px-1">Access Role</label>
-                  <div className="relative">
-                    <select
-                      value={role}
-                      onChange={(e) => setRole(e.target.value)}
-                      className="w-full appearance-none bg-surface-container-low border-none border-b-2 border-transparent focus:ring-0 focus:border-primary px-4 py-3.5 rounded-lg text-on-surface text-sm transition-all cursor-pointer"
-                    >
-                      <option value="owner">Owner</option>
-                      <option value="manager">Manager</option>
-                      <option value="staff">Staff</option>
-                    </select>
-                    <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-on-surface-variant">
-                      <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>expand_more</span>
+              {/* ── LOGIN STEP ── */}
+              {loginStep === "login" && (
+                <>
+                  <div className="mb-10">
+                    <h3 className="text-2xl font-semibold text-on-surface mb-2">Welcome Back</h3>
+                    <p className="text-on-surface-variant text-sm">Please enter your credentials to access the workspace.</p>
+                  </div>
+                  {successMsg && <div className="mb-4 p-3 bg-green-50 text-green-700 text-xs rounded-lg font-semibold">{successMsg}</div>}
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="space-y-2">
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant px-1">Access Role</label>
+                      <div className="relative">
+                        <select value={role} onChange={e => setRole(e.target.value)}
+                          className="w-full appearance-none bg-surface-container-low border-none focus:ring-0 focus:border-primary px-4 py-3.5 rounded-lg text-on-surface text-sm transition-all cursor-pointer outline-none">
+                          <option value="owner">Owner</option>
+                          <option value="manager">Manager</option>
+                          <option value="staff">Staff</option>
+                        </select>
+                        <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none text-on-surface-variant">
+                          <span className="material-symbols-outlined text-xl">expand_more</span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-
-                {/* Email Input */}
-                <div className="space-y-2 bg-transparent">
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant px-1">Email Address</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="w-full bg-surface-container-low border-none border-b-2 border-transparent focus:ring-0 focus:border-primary px-4 py-3.5 rounded-lg text-on-surface text-sm placeholder:text-outline-variant transition-all"
-                    placeholder="name@company.com"
-                  />
-                </div>
-
-                {/* Password Input */}
-                <div className="space-y-2 relative">
-                  <div className="flex justify-between items-center px-1">
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Password</label>
-                    <a className="text-[11px] font-bold uppercase tracking-wider text-primary hover:text-on-primary-fixed-variant transition-colors" href="#">Forgot?</a>
-                  </div>
-                  <div className="relative">
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    autoComplete="current-password"
-                      className="w-full bg-surface-container-low border-none border-b-2 border-transparent focus:ring-0 focus:border-primary px-4 py-3.5 rounded-lg text-on-surface text-sm placeholder:text-outline-variant transition-all"
-                      placeholder="••••••••"
-                    />
-                    <button className="absolute inset-y-0 right-3 flex items-center text-on-surface-variant hover:text-on-surface" type="button">
-                      <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>visibility</span>
+                    <div className="space-y-2">
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant px-1">Email Address</label>
+                      <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
+                        className="w-full bg-surface-container-low border-none focus:ring-0 focus:border-primary px-4 py-3.5 rounded-lg text-on-surface text-sm outline-none transition-all"
+                        placeholder="name@company.com" />
+                    </div>
+                    <div className="space-y-2 relative">
+                      <div className="flex justify-between items-center px-1">
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Password</label>
+                        <button type="button" onClick={() => { setLoginStep("forgot-email"); setError(null); setSuccessMsg(null); }}
+                          className="text-[11px] font-bold uppercase tracking-wider text-primary hover:text-on-primary-fixed-variant transition-colors">
+                          Forgot?
+                        </button>
+                      </div>
+                      <input type="password" value={password} onChange={e => setPassword(e.target.value)} required autoComplete="current-password"
+                        className="w-full bg-surface-container-low border-none focus:ring-0 focus:border-primary px-4 py-3.5 rounded-lg text-on-surface text-sm outline-none transition-all"
+                        placeholder="••••••••" />
+                    </div>
+                    {error && <div className="text-error text-xs px-1">{error}</div>}
+                    <button type="submit" disabled={loading}
+                      className="w-full py-4 neon-gradient-btn rounded-xl text-on-primary-fixed font-bold tracking-tight text-base hover:shadow-lg hover:shadow-primary/20 transform active:scale-[0.98] transition-all duration-200">
+                      {loading ? "Signing In..." : "Sign In"}
                     </button>
+                  </form>
+                  <p className="mt-10 text-center text-sm text-on-surface-variant">
+                    Don't have an account? <Link className="text-primary font-bold hover:underline decoration-2 underline-offset-4 ml-1" to="/register">Request Access</Link>
+                  </p>
+                </>
+              )}
+
+              {/* ── FORGOT: ENTER EMAIL ── */}
+              {loginStep === "forgot-email" && (
+                <>
+                  <div className="mb-8">
+                    <h3 className="text-2xl font-semibold text-on-surface mb-2">Reset Password</h3>
+                    <p className="text-on-surface-variant text-sm">Enter your email and we'll send you an OTP.</p>
                   </div>
-                </div>
+                  <form onSubmit={handleForgotSendOtp} className="space-y-6">
+                    <div className="space-y-2">
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant px-1">Email Address</label>
+                      <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} required
+                        className="w-full bg-surface-container-low border-none focus:ring-0 focus:border-primary px-4 py-3.5 rounded-lg text-on-surface text-sm outline-none transition-all"
+                        placeholder="name@company.com" />
+                    </div>
+                    {error && <div className="text-error text-xs px-1">{error}</div>}
+                    <button type="submit" disabled={loading}
+                      className="w-full py-4 neon-gradient-btn rounded-xl text-on-primary-fixed font-bold text-base active:scale-[0.98] transition-all">
+                      {loading ? "Sending OTP..." : "Send OTP"}
+                    </button>
+                    <button type="button" onClick={() => { setLoginStep("login"); setError(null); }}
+                      className="w-full py-2 text-sm text-on-surface-variant hover:text-on-surface transition-colors">← Back to login</button>
+                  </form>
+                </>
+              )}
 
-                {error && <div className="text-error text-xs px-1">{error}</div>}
+              {/* ── FORGOT: VERIFY OTP ── */}
+              {loginStep === "forgot-otp" && (
+                <>
+                  <div className="mb-8">
+                    <h3 className="text-2xl font-semibold text-on-surface mb-2">Enter OTP</h3>
+                    <p className="text-on-surface-variant text-sm">We sent a 6-digit code to <strong>{forgotEmail}</strong>.</p>
+                  </div>
+                  <form onSubmit={handleForgotVerifyOtp} className="space-y-6">
+                    <input type="text" value={forgotOtp} onChange={e => setForgotOtp(e.target.value)} required maxLength={6}
+                      className="w-full bg-surface-container-low border-2 border-transparent focus:border-primary px-4 py-4 rounded-xl text-on-surface text-center text-2xl font-black tracking-[0.5em] outline-none transition-all"
+                      placeholder="000000" />
+                    {error && <div className="text-error text-xs px-1">{error}</div>}
+                    <button type="submit" disabled={loading}
+                      className="w-full py-4 neon-gradient-btn rounded-xl text-on-primary-fixed font-bold text-base active:scale-[0.98] transition-all">
+                      {loading ? "Verifying..." : "Verify OTP"}
+                    </button>
+                    <button type="button" onClick={() => { setLoginStep("forgot-email"); setError(null); }}
+                      className="w-full py-2 text-sm text-on-surface-variant hover:text-on-surface transition-colors">← Resend OTP</button>
+                  </form>
+                </>
+              )}
 
-                {/* Submit Action */}
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-4 neon-gradient-btn rounded-xl text-on-primary-fixed font-bold tracking-tight text-base hover:shadow-lg hover:shadow-primary/20 transform active:scale-[0.98] transition-all duration-200"
-                >
-                  {loading ? "Signing In..." : "Sign In"}
-                </button>
-              </form>
+              {/* ── FORGOT: NEW PASSWORD ── */}
+              {loginStep === "forgot-newpass" && (
+                <>
+                  <div className="mb-8">
+                    <h3 className="text-2xl font-semibold text-on-surface mb-2">Set New Password</h3>
+                    <p className="text-on-surface-variant text-sm">Choose a strong password for your account.</p>
+                  </div>
+                  <form onSubmit={handleForgotResetPassword} className="space-y-6">
+                    <div className="space-y-2">
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant px-1">New Password</label>
+                      <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required
+                        className="w-full bg-surface-container-low border-none focus:ring-0 focus:border-primary px-4 py-3.5 rounded-lg text-on-surface text-sm outline-none transition-all"
+                        placeholder="Min 8 chars, upper, lower, number, special" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant px-1">Confirm Password</label>
+                      <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required
+                        className="w-full bg-surface-container-low border-none focus:ring-0 focus:border-primary px-4 py-3.5 rounded-lg text-on-surface text-sm outline-none transition-all"
+                        placeholder="••••••••" />
+                    </div>
+                    {error && <div className="text-error text-xs px-1">{error}</div>}
+                    <button type="submit" disabled={loading}
+                      className="w-full py-4 neon-gradient-btn rounded-xl text-on-primary-fixed font-bold text-base active:scale-[0.98] transition-all">
+                      {loading ? "Updating..." : "Update Password"}
+                    </button>
+                  </form>
+                </>
+              )}
 
-              {/* Divider */}
-              <div className="my-8 flex items-center gap-4">
-                <div className="h-[1px] flex-grow bg-outline-variant/20"></div>
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-outline-variant">OR CONTINUE WITH</span>
-                <div className="h-[1px] flex-grow bg-outline-variant/20"></div>
-              </div>
-
-              {/* Social Auth */}
-              <div className="grid grid-cols-2 gap-4">
-                <button type="button" className="flex items-center justify-center gap-2 py-3 rounded-lg border border-outline-variant/10 hover:bg-surface-container-low transition-colors duration-200">
-                  <img alt="Google" className="w-4 h-4 opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAcu-d0FCPy6cof--Iau8G30NM1fqwTFkAlym18Wo-ICO8wpbvEb0yO1xYg8SZPK0JZUnIoyE5ruhQiBKNb9Du_dRMhsm1B6gQ54GmfSLd1mFYNr0QRrIEFUObY5XAj2-6FVwPLwBRRo-HkrMhJ1FJPb3VO8n0EKtnOzB4UU8mvWxl4CNsI-AMtq8QFpccvxDbEzsswFVdSLqkweXRoZioRhW5ngJJst-R7e6CEM3jyePDGON5XDKb5yD9XDvzshbR7ypEc_bHKWr0" />
-                  <span className="text-sm font-medium text-on-surface">Google</span>
-                </button>
-                <button type="button" className="flex items-center justify-center gap-2 py-3 rounded-lg border border-outline-variant/10 hover:bg-surface-container-low transition-colors duration-200">
-                  <span className="material-symbols-outlined text-xl text-on-surface" style={{ fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>ios</span>
-                  <span className="text-sm font-medium text-on-surface">Apple</span>
-                </button>
-              </div>
-
-              {/* Footer Link */}
-              <p className="mt-10 text-center text-sm text-on-surface-variant">
-                Don't have an account? <Link className="text-primary font-bold hover:underline decoration-2 underline-offset-4 ml-1" to="/register">Request Access</Link>
-              </p>
             </div>
           </div>
         </div>
       </main>
 
-      {/* Footer Identity */}
       <footer className="w-full mt-auto z-10 relative">
         <div className="flex flex-col md:flex-row justify-between items-center w-full px-8 py-8 max-w-7xl mx-auto space-y-4 md:space-y-0">
           <p className="font-['Inter'] text-sm tracking-normal text-neutral-500">© 2024 Ventorie. Kinetic Inventory Management.</p>
@@ -210,7 +315,6 @@ export default function Login() {
         </div>
       </footer>
 
-      {/* Decorative Background Elements */}
       <div className="absolute inset-0 w-full h-full -z-0 pointer-events-none overflow-hidden opacity-40">
         <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-primary-container/20 blur-[120px]"></div>
         <div className="absolute bottom-[-10%] left-[-5%] w-[400px] h-[400px] rounded-full bg-surface-container-high/30 blur-[100px]"></div>
