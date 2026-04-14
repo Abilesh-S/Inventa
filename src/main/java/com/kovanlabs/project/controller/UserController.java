@@ -17,19 +17,34 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@CrossOrigin("http://localhost:5173")
+@CrossOrigin(origins = {"http://localhost:5173", "http://localhost:5174"})
 @RequestMapping("/api/users")
 public class UserController {
 
     private final UserService userService;
     private final JwtService jwtService;
     private final com.kovanlabs.project.repository.UserRepository userRepository;
+    private final com.kovanlabs.project.service.EmailService emailService;
 
     public UserController(UserService userService, JwtService jwtService,
-                          com.kovanlabs.project.repository.UserRepository userRepository) {
+                          com.kovanlabs.project.repository.UserRepository userRepository,
+                          com.kovanlabs.project.service.EmailService emailService) {
         this.userService = userService;
         this.jwtService = jwtService;
         this.userRepository = userRepository;
+        this.emailService = emailService;
+    }
+
+    @PostMapping("/verify-email")
+    public ResponseEntity<String> emailVerification(@RequestBody com.kovanlabs.project.dto.OwnerDTO dto) {
+        emailService.sendVerificationEmail(dto.getEmailId());
+        return ResponseEntity.ok("Verification email sent successfully");
+    }
+
+    @PostMapping("/validate-otp")
+    public ResponseEntity<String> validateOtp(@RequestBody com.kovanlabs.project.dto.OwnerDTO dto) {
+        emailService.validateVerificationEmail(dto.getEmailId(), dto.getEmailOtp());
+        return ResponseEntity.ok("OTP validated successfully");
     }
 
     @GetMapping

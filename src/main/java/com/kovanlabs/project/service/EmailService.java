@@ -6,6 +6,7 @@ import com.kovanlabs.project.repository.EmailVerificationRepository;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -19,6 +20,9 @@ public class EmailService {
     @Autowired
     private EmailVerificationRepository emailVerificationRepository;
 
+    @Value("${email.sender}")
+    private String senderEmail;
+
     /** Sends a 6-digit OTP for email verification (registration flow) */
     @Transactional
     public void sendVerificationEmail(String email) {
@@ -26,7 +30,7 @@ public class EmailService {
             String otp = generateOtp();
             MimeMessage message = javaMailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true);
-            helper.setFrom("abilesh1545@gmail.com");
+            helper.setFrom(senderEmail);
             helper.setTo(email);
             helper.setSubject("Ventorie — Email Verification");
             helper.setText(
@@ -79,7 +83,7 @@ public class EmailService {
             String otp = generateOtp();
             MimeMessage message = javaMailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true);
-            helper.setFrom("abilesh1545@gmail.com");
+            helper.setFrom(senderEmail);
             helper.setTo(email);
             helper.setSubject("Welcome to Ventorie — Your Account is Ready");
             helper.setText(
@@ -104,7 +108,7 @@ public class EmailService {
             String otp = generateOtp();
             MimeMessage message = javaMailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true);
-            helper.setFrom("abilesh1545@gmail.com");
+            helper.setFrom(senderEmail);
             helper.setTo(email);
             helper.setSubject("Ventorie — Password Reset OTP");
             helper.setText(

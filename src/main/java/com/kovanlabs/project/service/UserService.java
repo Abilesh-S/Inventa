@@ -14,10 +14,10 @@ import java.util.regex.Pattern;
 
 @Service
 public class UserService {
-    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
     // Min 8 chars, at least 1 upper, 1 lower, 1 digit, 1 special
     private static final Pattern PASSWORD_PATTERN = Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z\\d]).{8,}$");
-    private static final Pattern PHONE_PATTERN = Pattern.compile("^\\d{10,15}$");
+    private static final Pattern PHONE_PATTERN = Pattern.compile("^\\+?\\d{10,15}$");
 
     private final UserRepository userRepository;
     private final BusinessRepository businessRepository;
@@ -176,8 +176,9 @@ public class UserService {
         if (dto.getEmail() == null || !EMAIL_PATTERN.matcher(dto.getEmail().trim()).matches()) {
             throw new IllegalArgumentException("Invalid email format");
         }
-        if (dto.getPhone() == null || !PHONE_PATTERN.matcher(dto.getPhone().trim()).matches()) {
-            throw new IllegalArgumentException("Invalid phone format. Use 10 to 15 digits");
+        String normalizedPhone = dto.getPhone() != null ? dto.getPhone().trim().replace(" ", "") : null;
+        if (normalizedPhone == null || !PHONE_PATTERN.matcher(normalizedPhone).matches()) {
+            throw new IllegalArgumentException("Invalid phone format. Use 10 to 15 digits (optional +)");
         }
         // Password validation only when a password is explicitly provided
         if (dto.getPassword() != null && !dto.getPassword().isBlank()
@@ -185,9 +186,8 @@ public class UserService {
             throw new IllegalArgumentException("Invalid password format. Min 8 chars with upper, lower, number, special");
         }
 
-        String normalizedEmail = dto.getEmail().trim();
-        String normalizedPhone = dto.getPhone().trim();
-        if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
+        String cleanEmail = dto.getEmail().trim();
+        if (userRepository.existsByEmailIgnoreCase(cleanEmail)) {
             throw new IllegalArgumentException("Email already exists");
         }
         if (userRepository.existsByPhone(normalizedPhone)) {
